@@ -26,6 +26,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState("")
   
+  // UI States
   const [expandedId, setExpandedId] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
   const [editingCandidate, setEditingCandidate] = useState(null)
@@ -36,9 +37,12 @@ function App() {
   // Mobile UI
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState(null)
-
-  // ⚠️ REPLACE WITH YOUR RENDER URL
-  const API_URL = 'https://cv-tracker-api.onrender.com';
+  
+  const isLocal = window.location.hostname === "localhost" || window.location.hostname.includes("192.168");
+  
+  const API_URL = isLocal 
+    ? 'http://127.0.0.1:8000'        // <--- Your Local IP
+    : 'https://cv-tracker-api.onrender.com'; // <--- Your Render URL
 
   useEffect(() => { fetchCandidates() }, [])
 
@@ -127,19 +131,21 @@ function App() {
   }
 
   const loadPdfIntoView = (person) => {
-    // Check if file_id exists (GridFS), otherwise fallback to file_name (Local)
     let fileUrl;
-    if (person.file_id) {
-        fileUrl = `${API_URL}/files/${person.file_id}`;
+    
+    // Use the new, robust proxy endpoint from your FastAPI server
+    if (person._id) {
+        fileUrl = `${API_URL}/cv/${person._id}`; 
     } else {
-        fileUrl = `${API_URL}/static/${person.file_name}`;
+        // Fallback for files not in MongoDB
+        fileUrl = `${API_URL}/static/${person.file_name}`; 
     }
 
     const isPdf = person.file_name.toLowerCase().endsWith(".pdf");
     setFileType(isPdf ? "application/pdf" : "image/jpeg");
     setPreviewUrl(fileUrl);
     setZoom(1.0);
-  }
+}
 
   const handleDelete = async (id, name, e) => {
     e.stopPropagation(); 
@@ -187,6 +193,15 @@ function App() {
     setCopiedId(person._id); setTimeout(() => setCopiedId(null), 2000)
   }
 
+  // --- HELPER: Convert AI Date to YYYY-MM-DD ---
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return ""; 
+    return date.toISOString().split('T')[0];
+  }
+
   // --- RENDER ---
   return (
     <div className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden">
@@ -197,7 +212,7 @@ function App() {
           <div className="bg-black text-white p-2 rounded cursor-pointer">
             <FaRobot size={18} />
           </div>
-          <span className="font-bold text-xl tracking-tight">CV<span className="text-zinc-400">TRACKER</span></span>
+          <span className="font-bold text-xl tracking-tight">CV<span className="text-zinc-400">Tracker</span></span>
         </div>
         <div className="flex items-center gap-4">
              <button onClick={handleExport} className="hidden sm:flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase">
@@ -333,11 +348,12 @@ function App() {
           </div>
         </div>
 
-        {/* --- RIGHT PANEL: PDF PREVIEW (FIXED SCROLL & ZOOM) --- */}
+        {/* --- RIGHT PANEL: PDF PREVIEW --- */}
         <div className={`flex-1 bg-zinc-100 relative flex flex-col h-full overflow-hidden
             ${showMobilePreview ? 'fixed inset-0 z-50 bg-white' : 'hidden lg:flex'}
         `}>
           
+          {/* VIEWER HEADER */}
           <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10">
             <div className="flex items-center gap-3">
               <button onClick={() => setShowMobilePreview(false)} className="lg:hidden p-2 -ml-2 text-black hover:bg-zinc-100 rounded transition"><FaArrowLeft /></button>
@@ -356,7 +372,7 @@ function App() {
             )}
           </div>
 
-          {/* SCROLLABLE VIEWER CONTAINER */}
+          {/* VIEWER CONTENT */}
           <div 
             className={`flex-1 overflow-auto p-4 lg:p-10 bg-zinc-100 transition-all duration-300
               ${editingCandidate && window.innerWidth >= 1024 ? 'border-b border-zinc-300' : ''}
@@ -366,9 +382,9 @@ function App() {
              <div className="min-h-full flex justify-center items-start">
                 {previewUrl ? (
                     fileType.includes("pdf") ? (
-                        <div className="shadow-2xl border border-zinc-200 bg-white">
-                            <Document file={previewUrl} loading={<div className="p-10 font-bold text-xs">LOADING...</div>}>
-                                {/* FIX: Multiply width by zoom, NO CSS TRANSFORM */}
+                        <div>
+                            <Document file={previewUrl} loading={<div className="p-10 text-xs">Loading...</div>}>
+                                {/* FIXED: Use explicit width for sharp zoom */}
                                 <Page 
                                     pageNumber={1} 
                                     width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom} 
@@ -378,7 +394,7 @@ function App() {
                             </Document>
                         </div>
                     ) : (
-                        // FIX: Use Width % for images so scrollbar triggers
+                        // FIXED: Use width % for images so scrollbars work
                         <img 
                             src={previewUrl} 
                             className="shadow-md rounded-lg border border-white object-contain" 
@@ -405,7 +421,7 @@ function App() {
                   transition={{ type: "spring", bounce: 0, duration: 0.4 }}
                   className="hidden lg:flex bg-white border-t-4 border-black flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-20"
                 >
-                    <EditForm editingCandidate={editingCandidate} setEditingCandidate={setEditingCandidate} saveEdit={saveEdit} handleEditChange={handleEditChange} />
+                    <EditForm editingCandidate={editingCandidate} setEditingCandidate={setEditingCandidate} saveEdit={saveEdit} handleEditChange={handleEditChange} formatDateForInput={formatDateForInput} />
                 </motion.div>
             )}
           </AnimatePresence>
@@ -442,7 +458,7 @@ function App() {
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
                     className="h-[65%] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden border-t border-zinc-200"
                 >
-                    <EditForm editingCandidate={editingCandidate} setEditingCandidate={setEditingCandidate} saveEdit={saveEdit} handleEditChange={handleEditChange} isMobile={true} />
+                    <EditForm editingCandidate={editingCandidate} setEditingCandidate={setEditingCandidate} saveEdit={saveEdit} handleEditChange={handleEditChange} formatDateForInput={formatDateForInput} isMobile={true} />
                 </motion.div>
             </motion.div>
         )}
@@ -452,7 +468,7 @@ function App() {
 }
 
 // Reusable Edit Form
-const EditForm = ({ editingCandidate, setEditingCandidate, saveEdit, handleEditChange, isMobile }) => (
+const EditForm = ({ editingCandidate, setEditingCandidate, saveEdit, handleEditChange, formatDateForInput, isMobile }) => (
     <>
         <div className="flex-none px-6 py-3 border-b border-zinc-100 flex justify-between items-center bg-zinc-50">
             <h2 className="font-bold text-black uppercase tracking-wide text-xs flex items-center gap-2">
@@ -472,7 +488,7 @@ const EditForm = ({ editingCandidate, setEditingCandidate, saveEdit, handleEditC
             <div className="grid grid-cols-2 gap-4 max-w-4xl mx-auto">
                 <SolidInput label="Full Name" name="Name" val={editingCandidate.Name} onChange={handleEditChange} />
                 <SolidInput label="Phone" name="Tel" val={editingCandidate.Tel} onChange={handleEditChange} />
-                <SolidInput label="Birth Date" name="Birth" val={editingCandidate.Birth} onChange={handleEditChange} type="date" />
+                <SolidInput label="Birth Date" name="Birth" val={formatDateForInput(editingCandidate.Birth)} onChange={handleEditChange} type="date" />
                 <SolidInput label="Address" name="Location" val={editingCandidate.Location} onChange={handleEditChange} />
                 <div className="col-span-2">
                     <SolidInput label="School" name="School" val={editingCandidate.School} onChange={handleEditChange} />
@@ -495,7 +511,7 @@ const EditForm = ({ editingCandidate, setEditingCandidate, saveEdit, handleEditC
 const StatItem = ({ label, val }) => (
   <div>
     <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">{label}</p>
-    <p className="text-lg font-bold text-black truncate" title={val}>{val}</p>
+    <p className="text-lg font-medium text-black truncate" title={val}>{val}</p>
   </div>
 )
 
