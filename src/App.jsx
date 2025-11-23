@@ -10,9 +10,10 @@ import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel, 
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake, 
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
-  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo // <--- Added FaRedo
+  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo
 } from 'react-icons/fa'
 
+// Configure PDF Worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 function App() {
@@ -36,10 +37,8 @@ function App() {
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState(null)
 
-  // ⚠️ REPLACE WITH YOUR IP
-  // const API_URL = 'http://192.168.100.54:8000'; 
-  // The URL from your Render Dashboard
-const API_URL = 'https://cv-tracker-api.onrender.com';
+  // ⚠️ REPLACE WITH YOUR RENDER URL
+  const API_URL = 'https://cv-tracker-api.onrender.com';
 
   useEffect(() => { fetchCandidates() }, [])
 
@@ -128,7 +127,14 @@ const API_URL = 'https://cv-tracker-api.onrender.com';
   }
 
   const loadPdfIntoView = (person) => {
-    const fileUrl = `${API_URL}/static/${person.file_name}`;
+    // Check if file_id exists (GridFS), otherwise fallback to file_name (Local)
+    let fileUrl;
+    if (person.file_id) {
+        fileUrl = `${API_URL}/files/${person.file_id}`;
+    } else {
+        fileUrl = `${API_URL}/static/${person.file_name}`;
+    }
+
     const isPdf = person.file_name.toLowerCase().endsWith(".pdf");
     setFileType(isPdf ? "application/pdf" : "image/jpeg");
     setPreviewUrl(fileUrl);
@@ -327,7 +333,7 @@ const API_URL = 'https://cv-tracker-api.onrender.com';
           </div>
         </div>
 
-        {/* --- RIGHT PANEL: PDF PREVIEW --- */}
+        {/* --- RIGHT PANEL: PDF PREVIEW (FIXED SCROLL & ZOOM) --- */}
         <div className={`flex-1 bg-zinc-100 relative flex flex-col h-full overflow-hidden
             ${showMobilePreview ? 'fixed inset-0 z-50 bg-white' : 'hidden lg:flex'}
         `}>
@@ -345,34 +351,48 @@ const API_URL = 'https://cv-tracker-api.onrender.com';
                 <span className="text-[10px] font-bold text-zinc-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom(z => Math.min(3.0, z + 0.2))} className="p-1 text-zinc-500 hover:text-black"><FaSearchPlus size={12} /></button>
                 <div className="w-px h-3 bg-zinc-200 mx-1"></div>
-                {/* --- RESTORED RESET BUTTON --- */}
                 <button onClick={() => setZoom(1.0)} className="p-1 text-zinc-500 hover:text-black" title="Reset Zoom"><FaRedo size={12} /></button>
               </div>
             )}
           </div>
 
+          {/* SCROLLABLE VIEWER CONTAINER */}
           <div 
-            className={`flex-1 overflow-auto p-4 lg:p-10 flex justify-center items-start bg-zinc-100 transition-all duration-300
+            className={`flex-1 overflow-auto p-4 lg:p-10 bg-zinc-100 transition-all duration-300
               ${editingCandidate && window.innerWidth >= 1024 ? 'border-b border-zinc-300' : ''}
               ${editingCandidate && window.innerWidth < 1024 ? 'pb-[60vh]' : ''} 
             `}
           >
-             {previewUrl ? (
-                <div className="shadow-2xl border border-zinc-200 bg-white origin-top" style={{ transform: `scale(${zoom})` }}>
-                  {fileType.includes("pdf") ? (
-                    <Document file={previewUrl} loading={<div className="p-10 font-bold text-xs">LOADING...</div>}>
-                      <Page pageNumber={1} width={window.innerWidth < 768 ? window.innerWidth - 32 : 650} renderTextLayer={false} renderAnnotationLayer={false} />
-                    </Document>
-                  ) : (
-                     <img src={previewUrl} className="max-w-[650px] w-full block" alt="CV" />
-                  )}
-                </div>
-             ) : (
-                <div className="mt-20 flex flex-col items-center text-zinc-300 gap-4">
-                   <FaCopy size={48} className="opacity-20" />
-                   <p className="text-xs font-bold uppercase tracking-widest">Select a candidate</p>
-                </div>
-             )}
+             <div className="min-h-full flex justify-center items-start">
+                {previewUrl ? (
+                    fileType.includes("pdf") ? (
+                        <div className="shadow-2xl border border-zinc-200 bg-white">
+                            <Document file={previewUrl} loading={<div className="p-10 font-bold text-xs">LOADING...</div>}>
+                                {/* FIX: Multiply width by zoom, NO CSS TRANSFORM */}
+                                <Page 
+                                    pageNumber={1} 
+                                    width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom} 
+                                    renderTextLayer={false} 
+                                    renderAnnotationLayer={false} 
+                                />
+                            </Document>
+                        </div>
+                    ) : (
+                        // FIX: Use Width % for images so scrollbar triggers
+                        <img 
+                            src={previewUrl} 
+                            className="shadow-md rounded-lg border border-white object-contain" 
+                            alt="CV"
+                            style={{ width: `${100 * zoom}%`, maxWidth: 'none' }}
+                        />
+                    )
+                ) : (
+                    <div className="mt-20 flex flex-col items-center text-zinc-300 gap-4">
+                        <FaCopy size={48} className="opacity-20" />
+                        <p className="text-xs font-bold uppercase tracking-widest">Select a candidate</p>
+                    </div>
+                )}
+             </div>
           </div>
 
           {/* DESKTOP SPLIT EDIT */}
