@@ -5,12 +5,14 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
+import Swal from 'sweetalert2'
+import withReactContent from 'sweetalert2-react-content'
 
 import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel,
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
-  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo, FaLock, FaUnlock, FaVenusMars
+  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes
 } from 'react-icons/fa'
 
 // Component imports will be added after creating component files
@@ -95,6 +97,21 @@ function App() {
       return 0
     })
 
+  const MySwal = withReactContent(Swal)
+
+  // Create a reusable Toast configuration (for small notifications like "Copied")
+  const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+      toast.addEventListener('mouseenter', Swal.stopTimer)
+      toast.addEventListener('mouseleave', Swal.resumeTimer)
+    }
+  })
+
   // --- SELECTION FUNCTIONS ---
   const toggleSelection = (id) => {
     setSelectedIds(prev =>
@@ -102,14 +119,21 @@ function App() {
     )
   }
 
+  // Smart Toggle: If ANY are selected, it clears them. If NONE, it selects all.
   const toggleSelectAll = () => {
-    if (selectedIds.length === processedCandidates.filter(c => !c.locked).length) {
-      setSelectedIds([])
+    if (selectedIds.length > 0) {
+      setSelectedIds([]) // Acts as "Clear"
     } else {
-      // Only select unlocked candidates
+      // Select only unlocked candidates
       const unlocked = processedCandidates.filter(c => !c.locked).map(c => c._id)
       setSelectedIds(unlocked)
     }
+  }
+
+  // Ensure Exit button clears selection too
+  const handleExitMode = () => {
+    setSelectedIds([])
+    setSelectMode(false)
   }
 
   const clearSelection = () => {
@@ -133,20 +157,44 @@ function App() {
   }
 
   const handleUpload = async () => {
-    if (files.length === 0) return alert("Select files first")
+    // 1. Use Toast/Swal instead of native alert
+    if (files.length === 0) {
+      Toast.fire({ icon: 'warning', title: 'Please select files first' })
+      return
+    }
+
     setLoading(true)
     setStatus(`Processing...`)
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) formData.append('files', files[i])
+
     try {
       const res = await axios.post(`${API_URL}/upload-cv`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+
       setStatus(`Done. ${res.data.details.length} scanned.`)
+
+      // 2. Success Popup (Correctly implemented)
+      MySwal.fire({
+        icon: 'success',
+        title: 'Upload Complete',
+        text: `Processed ${res.data.details.length} files.`,
+        timer: 2000,
+        showConfirmButton: false
+      })
+
       fetchCandidates()
       handleClearFiles()
     } catch (error) {
       setStatus("Upload failed.")
+
+      // 3. Add Error Popup here too
+      MySwal.fire({
+        icon: 'error',
+        title: 'Upload Failed',
+        text: 'Something went wrong with the server.',
+      })
     }
     finally {
       setLoading(false)
@@ -192,33 +240,58 @@ function App() {
 
   const handleDelete = async (id, name, e) => {
     e.stopPropagation()
-    if (!window.confirm(`Delete ${name}?`)) return
-    try {
-      const response = await axios.delete(`${API_URL}/candidates/${id}`)
-      if (response.data.status.includes("locked")) {
-        alert("Cannot delete: Candidate is locked")
-        return
+
+    const result = await MySwal.fire({
+      title: 'Delete candidate?',
+      text: `Are you sure you want to remove ${name}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#000', // Black to match theme
+      cancelButtonColor: '#d4d4d8', // Zinc-300
+      confirmButtonText: 'Yes, delete it'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        const response = await axios.delete(`${API_URL}/candidates/${id}`)
+        if (response.data.status.includes("locked")) {
+          Toast.fire({ icon: 'error', title: 'Candidate is locked!' })
+          return
+        }
+        fetchCandidates()
+        if (showMobilePreview) setShowMobilePreview(false)
+        if (editingCandidate && editingCandidate._id === id) setEditingCandidate(null)
+        setSelectedIds(prev => prev.filter(i => i !== id))
+
+        Toast.fire({ icon: 'success', title: 'Candidate deleted' })
       }
-      fetchCandidates()
-      if (showMobilePreview) setShowMobilePreview(false)
-      if (editingCandidate && editingCandidate._id === id) setEditingCandidate(null)
-      setSelectedIds(prev => prev.filter(i => i !== id))
+      catch (error) { Toast.fire({ icon: 'error', title: 'Failed to delete' }) }
     }
-    catch (error) { alert("Failed to delete") }
   }
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return
-    if (!window.confirm(`Delete ${selectedIds.length} selected candidates?`)) return
 
-    try {
-      await axios.post(`${API_URL}/candidates/bulk-delete`, {
-        candidate_ids: selectedIds
-      })
-      fetchCandidates()
-      clearSelection()
-    } catch (error) {
-      alert("Failed to delete selected candidates")
+    const result = await MySwal.fire({
+      title: 'Bulk Delete',
+      text: `Delete ${selectedIds.length} selected candidates?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete them'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        await axios.post(`${API_URL}/candidates/bulk-delete`, {
+          candidate_ids: selectedIds
+        })
+        fetchCandidates()
+        clearSelection()
+        MySwal.fire('Deleted!', 'Selected candidates have been removed.', 'success')
+      } catch (error) {
+        MySwal.fire('Error', 'Failed to delete candidates', 'error')
+      }
     }
   }
 
@@ -226,32 +299,56 @@ function App() {
     const unlockedCount = candidates.filter(c => !c.locked).length
 
     if (unlockedCount === 0) {
-      alert("No unlocked candidates to delete.")
+      Toast.fire({ icon: 'info', title: 'No unlocked candidates to delete' })
       return
     }
 
-    // Direct Prompt: Combines the warning and the code entry
-    const code = window.prompt(`WARNING: You are about to delete ${unlockedCount} candidates.\n\nEnter Admin Passcode (9994) to confirm:`)
-
-    if (!code) return // User cancelled
-
-    try {
-      // Send empty array [] to trigger backend "Delete All" logic
-      const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
-        candidate_ids: [],
-        passcode: code
-      })
-
-      if (response.data.status === "error") {
-        alert(response.data.message) // "Invalid passcode..."
-      } else {
-        alert(`Success: ${response.data.deleted} candidates deleted.`)
-        fetchCandidates()
-        clearSelection()
+    const { value: passcode } = await MySwal.fire({
+      title: 'CRITICAL DELETION',
+      html: `You are about to delete <b>${unlockedCount} candidates</b>.<br/>This action cannot be undone.`,
+      icon: 'warning',
+      input: 'password',
+      inputLabel: 'Enter Admin Passcode',
+      inputPlaceholder: 'Passcode',
+      confirmButtonText: 'DELETE ALL',
+      confirmButtonColor: '#d33', // Red for danger
+      showCancelButton: true,
+      focusConfirm: false,
+      preConfirm: (value) => {
+        if (!value) {
+          Swal.showValidationMessage('Passcode is required')
+        }
+        return value
       }
-    } catch (error) {
-      alert("Failed to communicate with server.")
+    })
+
+    if (passcode) {
+      try {
+        const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
+          candidate_ids: [], // Triggers "delete all" mode in backend
+          passcode: passcode
+        })
+
+        if (response.data.status === "error") {
+          MySwal.fire('Error', response.data.message, 'error')
+        } else {
+          MySwal.fire('Deleted!', `Successfully deleted ${response.data.deleted} candidates.`, 'success')
+          fetchCandidates()
+          clearSelection()
+        }
+      } catch (error) {
+        MySwal.fire('Error', 'Server connection failed', 'error')
+      }
     }
+  }
+
+  // --- CLEAR PREVIEW FUNCTION ---
+  const handleClearPreview = () => {
+    setPreviewUrl(null)
+    setFileType("")
+    setSelectedPerson(null)
+    setExpandedId(null) // Optional: Collapses the card list selection too
+    if (editingCandidate) setEditingCandidate(null)
   }
 
   const handleExport = () => {
@@ -370,6 +467,7 @@ function App() {
             setSortOption={setSortOption}
             setSelectMode={setSelectMode}
             toggleSelectAll={toggleSelectAll}
+            handleExitMode={handleExitMode}
             clearSelection={clearSelection}
             handleBulkDelete={handleBulkDelete}
             handleClearAll={handleClearAll}
@@ -410,6 +508,7 @@ function App() {
             showMobilePreview={showMobilePreview}
             setShowMobilePreview={setShowMobilePreview}
             editingCandidate={editingCandidate}
+            onClear={handleClearPreview}
           />
 
           {/* DESKTOP SPLIT EDIT */}
@@ -543,7 +642,7 @@ const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll, clearSelection, handleBulkDelete, handleClearAll
+  toggleSelectAll,handleExitMode, clearSelection, handleBulkDelete, handleClearAll
 }) => {
   const unlockedCount = processedCandidates.filter(c => !c.locked).length
   const allSelected = selectedIds.length === unlockedCount && unlockedCount > 0
@@ -629,42 +728,42 @@ const ControlPanel = ({
           Clear All Candidates
         </button>
 
-        {/* Selection Mode Controls */}
+        {/* Selection Mode Controls (Mobile Optimized - 3 Buttons Max) */}
         <div className="flex gap-2">
+          {/* BUTTON 1: EXIT / SELECT */}
           <button
-            onClick={() => setSelectMode(!selectMode)}
-            className={`flex-1 py-2 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-2
-            ${selectMode ? 'bg-black text-white border-black' : 'bg-white text-black border-zinc-200 hover:border-black'}`}
+            onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
+            className={`py-2 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-2
+            ${selectMode
+                ? 'px-3 bg-black text-white border-black' // Compact X
+                : 'flex-1 bg-white text-black border-zinc-200 hover:border-black' // Wide Select
+              }`}
+            title={selectMode ? "Exit Selection" : "Enter Selection Mode"}
           >
-            {selectMode ? 'Exit Select' : 'Select'}
+            {selectMode ? <FaTimes size={14} /> : 'Select'}
           </button>
 
           {selectMode && (
             <>
+              {/* BUTTON 2: ALL / NONE (Acts as Clear) */}
               <button
                 onClick={toggleSelectAll}
-                className="px-4 py-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition"
+                className="flex-1 px-3 py-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate"
               >
-                {allSelected ? 'None' : 'All'}
+                {selectedIds.length > 0 ? 'None' : 'All'}
               </button>
 
-              {selectedIds.length > 0 && (
-                <>
-                  <button
-                    onClick={handleBulkDelete}
-                    className="px-4 py-2 bg-red-500 text-white text-xs font-bold uppercase rounded hover:bg-red-600 transition"
-                    title="Delete selected"
-                  >
-                    <FaTrash />
-                  </button>
-                  <button
-                    onClick={clearSelection}
-                    className="px-4 py-2 bg-zinc-100 text-zinc-600 text-xs font-bold uppercase rounded hover:bg-zinc-200 transition"
-                  >
-                    Clear
-                  </button>
-                </>
-              )}
+              {/* BUTTON 3: DELETE (Only shows when needed, keeping layout clean) */}
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.length === 0}
+                className={`px-4 py-2 text-white text-xs font-bold uppercase rounded transition
+                ${selectedIds.length > 0
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-zinc-300 cursor-not-allowed'}`}
+              >
+                <FaTrash />
+              </button>
             </>
           )}
         </div>
@@ -784,7 +883,7 @@ const CandidateCard = ({
                 onClick={(e) => handleOpenPdfMobile(e, person)}
                 className="flex-1 lg:hidden py-3 bg-white text-black text-xs font-bold uppercase tracking-wider rounded border border-black flex items-center justify-center gap-2 hover:bg-zinc-100"
               >
-                <FaEye /> View Doc
+                <FaFilePdf /> View Doc
               </button>
 
               <button
@@ -806,17 +905,18 @@ const CandidateCard = ({
 }
 
 // PDFViewer Component
-const PDFViewer = ({
-  previewUrl, fileType, zoom, setZoom,
-  showMobilePreview, setShowMobilePreview, editingCandidate
+const PDFViewer = ({ 
+  previewUrl, fileType, zoom, setZoom, 
+  showMobilePreview, setShowMobilePreview, editingCandidate,
+  onClear
 }) => {
   return (
     <>
       {/* VIEWER HEADER */}
       <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowMobilePreview(false)}
+          <button 
+            onClick={() => setShowMobilePreview(false)} 
             className="lg:hidden p-2 -ml-2 text-black hover:bg-zinc-100 rounded transition"
           >
             <FaArrowLeft />
@@ -825,11 +925,11 @@ const PDFViewer = ({
             <FaFilePdf className="text-zinc-400" size={12} /> Document Preview
           </div>
         </div>
-
+        
         {previewUrl && (
           <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded p-1">
-            <button
-              onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}
+            <button 
+              onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} 
               className="p-1 text-zinc-500 hover:text-black"
             >
               <FaSearchMinus size={12} />
@@ -837,26 +937,36 @@ const PDFViewer = ({
             <span className="text-xs font-bold text-zinc-400 w-8 text-center">
               {Math.round(zoom * 100)}%
             </span>
-            <button
-              onClick={() => setZoom(z => Math.min(3.0, z + 0.2))}
+            <button 
+              onClick={() => setZoom(z => Math.min(3.0, z + 0.2))} 
               className="p-1 text-zinc-500 hover:text-black"
             >
               <FaSearchPlus size={12} />
             </button>
             <div className="w-px h-3 bg-zinc-200 mx-1"></div>
-            <button
-              onClick={() => setZoom(1.0)}
-              className="p-1 text-zinc-500 hover:text-black"
+            <button 
+              onClick={() => setZoom(1.0)} 
+              className="p-1 text-zinc-500 hover:text-black" 
               title="Reset Zoom"
             >
               <FaRedo size={12} />
+            </button>
+            
+            {/* --- 2. NEW CLOSE BUTTON --- */}
+            <div className="w-px h-3 bg-zinc-200 mx-1"></div>
+            <button 
+              onClick={onClear} 
+              className="p-1 text-red-500 hover:bg-red-50 rounded transition" 
+              title="Close Preview"
+            >
+              <FaTimes size={12} />
             </button>
           </div>
         )}
       </div>
 
       {/* VIEWER CONTENT */}
-      <div
+      <div 
         className={`flex-1 overflow-auto p-4 lg:p-10 bg-zinc-100 transition-all duration-300
           ${editingCandidate && window.innerWidth >= 1024 ? 'border-b border-zinc-300' : ''}
           ${editingCandidate && window.innerWidth < 1024 ? 'pb-[60vh]' : ''} 
@@ -866,23 +976,23 @@ const PDFViewer = ({
           {previewUrl ? (
             fileType.includes("pdf") ? (
               <div>
-                <Document
-                  file={previewUrl}
+                <Document 
+                  file={previewUrl} 
                   loading={<div className="p-10 text-xs">Loading PDF...</div>}
                   error={<div className="p-10 text-xs text-red-500">Failed to load PDF</div>}
                 >
-                  <Page
-                    pageNumber={1}
-                    width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom}
-                    renderTextLayer={false}
-                    renderAnnotationLayer={false}
+                  <Page 
+                    pageNumber={1} 
+                    width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom} 
+                    renderTextLayer={false} 
+                    renderAnnotationLayer={false} 
                   />
                 </Document>
               </div>
             ) : (
-              <img
-                src={previewUrl}
-                className="shadow-md rounded-lg border border-white object-contain"
+              <img 
+                src={previewUrl} 
+                className="shadow-md rounded-lg border border-white object-contain" 
                 alt="CV"
                 style={{ width: `${100 * zoom}%`, maxWidth: 'none' }}
               />
