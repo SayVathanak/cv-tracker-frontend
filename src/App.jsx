@@ -460,7 +460,7 @@ function App() {
   // 1. Helper to format text (prevents code duplication)
   const formatCandidateText = (candidatesList) => {
     return candidatesList.map(p =>
-      `Name: ${p.Name}\nDOB: ${p.Birth || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
+      `Name: ${p.Name}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.Birth || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
     ).join('\n\n----------------------------------------\n\n')
   }
 
