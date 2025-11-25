@@ -12,11 +12,9 @@ import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel,
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
-  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes
+  FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
+  FaDownload
 } from 'react-icons/fa'
-
-// Component imports will be added after creating component files
-// For now, components are defined at the bottom of this file
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
@@ -46,6 +44,9 @@ function App() {
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState(null)
 
+  // PWA State
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+
   const isLocal = window.location.hostname === "localhost" || window.location.hostname.includes("192.168")
 
   const API_URL = isLocal
@@ -53,6 +54,26 @@ function App() {
     : 'https://cv-tracker-api.onrender.com'
 
   useEffect(() => { fetchCandidates() }, [])
+
+  // --- PWA INSTALL EFFECT ---
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+  }, [])
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt')
+    }
+    setDeferredPrompt(null)
+  }
 
   // --- API FUNCTIONS ---
   const fetchCandidates = async () => {
@@ -98,8 +119,6 @@ function App() {
     })
 
   const MySwal = withReactContent(Swal)
-
-  // Create a reusable Toast configuration (for small notifications like "Copied")
   const Toast = Swal.mixin({
     toast: true,
     position: 'top-end',
@@ -119,18 +138,15 @@ function App() {
     )
   }
 
-  // Smart Toggle: If ANY are selected, it clears them. If NONE, it selects all.
   const toggleSelectAll = () => {
     if (selectedIds.length > 0) {
-      setSelectedIds([]) // Acts as "Clear"
+      setSelectedIds([]) 
     } else {
-      // Select only unlocked candidates
       const unlocked = processedCandidates.filter(c => !c.locked).map(c => c._id)
       setSelectedIds(unlocked)
     }
   }
 
-  // Ensure Exit button clears selection too
   const handleExitMode = () => {
     setSelectedIds([])
     setSelectMode(false)
@@ -157,7 +173,6 @@ function App() {
   }
 
   const handleUpload = async () => {
-    // 1. Use Toast/Swal instead of native alert
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' })
       return
@@ -174,8 +189,6 @@ function App() {
       })
 
       setStatus(`Done. ${res.data.details.length} scanned.`)
-
-      // 2. Success Popup (Correctly implemented)
       MySwal.fire({
         icon: 'success',
         title: 'Upload Complete',
@@ -183,13 +196,10 @@ function App() {
         timer: 2000,
         showConfirmButton: false
       })
-
       fetchCandidates()
       handleClearFiles()
     } catch (error) {
       setStatus("Upload failed.")
-
-      // 3. Add Error Popup here too
       MySwal.fire({
         icon: 'error',
         title: 'Upload Failed',
@@ -208,7 +218,6 @@ function App() {
       toggleSelection(person._id)
       return
     }
-
     toggleExpand(person._id)
     setSelectedPerson(person)
     if (window.innerWidth >= 1024) {
@@ -225,13 +234,11 @@ function App() {
 
   const loadPdfIntoView = (person) => {
     let fileUrl
-
     if (person._id) {
       fileUrl = `${API_URL}/cv/${person._id}`
     } else {
       fileUrl = `${API_URL}/static/${person.file_name}`
     }
-
     const isPdf = person.file_name.toLowerCase().endsWith(".pdf")
     setFileType(isPdf ? "application/pdf" : "image/jpeg")
     setPreviewUrl(fileUrl)
@@ -240,14 +247,13 @@ function App() {
 
   const handleDelete = async (id, name, e) => {
     e.stopPropagation()
-
     const result = await MySwal.fire({
       title: 'Delete candidate?',
       text: `Are you sure you want to remove ${name}?`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonColor: '#000', // Black to match theme
-      cancelButtonColor: '#d4d4d8', // Zinc-300
+      confirmButtonColor: '#000',
+      cancelButtonColor: '#d4d4d8',
       confirmButtonText: 'Yes, delete it'
     })
 
@@ -262,42 +268,88 @@ function App() {
         if (showMobilePreview) setShowMobilePreview(false)
         if (editingCandidate && editingCandidate._id === id) setEditingCandidate(null)
         setSelectedIds(prev => prev.filter(i => i !== id))
-
         Toast.fire({ icon: 'success', title: 'Candidate deleted' })
       }
       catch (error) { Toast.fire({ icon: 'error', title: 'Failed to delete' }) }
     }
   }
 
+  // --- SMART DELETE FUNCTION ---
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return
 
-    const result = await MySwal.fire({
-      title: 'Bulk Delete',
-      text: `Delete ${selectedIds.length} selected candidates?`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, delete them'
-    })
+    // 1. Check if user selected ALL unlocked candidates
+    // (We compare selected count vs total unlocked count)
+    const totalUnlocked = candidates.filter(c => !c.locked).length
+    const isDeleteAll = selectedIds.length === totalUnlocked && totalUnlocked > 0
 
-    if (result.isConfirmed) {
-      try {
-        await axios.post(`${API_URL}/candidates/bulk-delete`, {
-          candidate_ids: selectedIds
-        })
-        fetchCandidates()
-        clearSelection()
-        MySwal.fire('Deleted!', 'Selected candidates have been removed.', 'success')
-      } catch (error) {
-        MySwal.fire('Error', 'Failed to delete candidates', 'error')
+    if (isDeleteAll) {
+      // --- SCENARIO A: DELETE ALL (Secure Mode) ---
+      const { value: passcode } = await MySwal.fire({
+        title: 'CRITICAL WARNING',
+        html: `You have selected <b>ALL ${selectedIds.length} CANDIDATES</b>.<br/>This will wipe the database.`,
+        icon: 'warning',
+        input: 'password',
+        inputLabel: 'Enter Admin Passcode to Confirm',
+        inputPlaceholder: 'Passcode',
+        confirmButtonText: 'DELETE EVERYTHING',
+        confirmButtonColor: '#d33',
+        showCancelButton: true,
+        focusConfirm: false,
+        preConfirm: (value) => {
+          if (!value) Swal.showValidationMessage('Passcode is required')
+          return value
+        }
+      })
+
+      if (passcode) {
+        try {
+          // Send empty array [] to trigger "Delete All" mode in backend
+          const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
+            candidate_ids: [], 
+            passcode: passcode
+          })
+
+          if (response.data.status === "error") {
+            MySwal.fire('Error', response.data.message, 'error')
+          } else {
+            MySwal.fire('Wiped!', `Database cleared. ${response.data.deleted} deleted.`, 'success')
+            fetchCandidates()
+            clearSelection()
+          }
+        } catch (error) {
+          MySwal.fire('Error', 'Server connection failed', 'error')
+        }
+      }
+
+    } else {
+      // --- SCENARIO B: STANDARD BULK DELETE (Normal Mode) ---
+      const result = await MySwal.fire({
+        title: 'Bulk Delete',
+        text: `Delete ${selectedIds.length} selected candidates?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#000',
+        confirmButtonText: 'Yes, delete them'
+      })
+
+      if (result.isConfirmed) {
+        try {
+          await axios.post(`${API_URL}/candidates/bulk-delete`, {
+            candidate_ids: selectedIds
+          })
+          fetchCandidates()
+          clearSelection()
+          MySwal.fire('Deleted!', 'Selected candidates have been removed.', 'success')
+        } catch (error) {
+          MySwal.fire('Error', 'Failed to delete candidates', 'error')
+        }
       }
     }
   }
 
   const handleClearAll = async () => {
     const unlockedCount = candidates.filter(c => !c.locked).length
-
     if (unlockedCount === 0) {
       Toast.fire({ icon: 'info', title: 'No unlocked candidates to delete' })
       return
@@ -311,13 +363,11 @@ function App() {
       inputLabel: 'Enter Admin Passcode',
       inputPlaceholder: 'Passcode',
       confirmButtonText: 'DELETE ALL',
-      confirmButtonColor: '#d33', // Red for danger
+      confirmButtonColor: '#d33',
       showCancelButton: true,
       focusConfirm: false,
       preConfirm: (value) => {
-        if (!value) {
-          Swal.showValidationMessage('Passcode is required')
-        }
+        if (!value) Swal.showValidationMessage('Passcode is required')
         return value
       }
     })
@@ -325,10 +375,9 @@ function App() {
     if (passcode) {
       try {
         const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
-          candidate_ids: [], // Triggers "delete all" mode in backend
+          candidate_ids: [],
           passcode: passcode
         })
-
         if (response.data.status === "error") {
           MySwal.fire('Error', response.data.message, 'error')
         } else {
@@ -342,12 +391,11 @@ function App() {
     }
   }
 
-  // --- CLEAR PREVIEW FUNCTION ---
   const handleClearPreview = () => {
     setPreviewUrl(null)
     setFileType("")
     setSelectedPerson(null)
-    setExpandedId(null) // Optional: Collapses the card list selection too
+    setExpandedId(null)
     if (editingCandidate) setEditingCandidate(null)
   }
 
@@ -407,21 +455,57 @@ function App() {
 
   const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id)
 
+  // --- COPY FUNCTIONS ---
+
+  // 1. Helper to format text (prevents code duplication)
+  const formatCandidateText = (candidatesList) => {
+    return candidatesList.map(p =>
+      `Name: ${p.Name}\nDOB: ${p.Birth || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
+    ).join('\n\n----------------------------------------\n\n')
+  }
+
+  // 2. Handle Single Copy (Existing, updated to use helper)
   const handleCopy = (person, e) => {
     if (e) e.stopPropagation()
     if (!person) return
 
-    const selected = selectedIds.length > 0 && selectMode
-      ? processedCandidates.filter(p => selectedIds.includes(p._id))
-      : [person]
-
-    const text = selected.map(p =>
-      `Name: ${p.Name}\nDOB: ${p.Birth || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
-    ).join('\n\n---\n\n')
-
+    const text = formatCandidateText([person])
     navigator.clipboard.writeText(text)
+    
     setCopiedId(person._id)
     setTimeout(() => setCopiedId(null), 2000)
+    Toast.fire({ icon: 'success', title: 'Copied to clipboard' })
+  }
+
+  // 3. NEW: Handle Bulk Copy (All or Selected)
+  const handleBulkCopy = (mode) => {
+    let candidatesToCopy = []
+
+    if (mode === 'selected') {
+      // Filter the processed list to only get selected IDs
+      candidatesToCopy = processedCandidates.filter(c => selectedIds.includes(c._id))
+    } else {
+      // Copy everyone currently visible (respecting search filters)
+      candidatesToCopy = processedCandidates
+    }
+
+    if (candidatesToCopy.length === 0) {
+      Toast.fire({ icon: 'warning', title: 'Nothing to copy' })
+      return
+    }
+
+    const text = formatCandidateText(candidatesToCopy)
+    navigator.clipboard.writeText(text)
+    
+    Toast.fire({ 
+      icon: 'success', 
+      title: `Copied ${candidatesToCopy.length} candidates!` 
+    })
+    
+    // Optional: Clear selection after copying
+    if (mode === 'selected') {
+        clearSelection()
+    }
   }
 
   const formatDateForInput = (dateString) => {
@@ -435,22 +519,20 @@ function App() {
   // --- RENDER ---
   return (
     <div className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden">
-
       <Navbar
         handleExport={handleExport}
         selectedCount={selectedIds.length}
         selectMode={selectMode}
+        deferredPrompt={deferredPrompt}      
+        handleInstallClick={handleInstallClick} 
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
-
         {/* LEFT PANEL */}
         <div className={`flex flex-col w-full lg:w-[500px] xl:w-[550px] border-r border-zinc-200 h-full transition-all duration-300 z-10 bg-white
           ${showMobilePreview ? 'hidden lg:flex' : 'flex'}
         `}>
-
           <StatsPanel stats={stats} />
-
           <ControlPanel
             files={files}
             loading={loading}
@@ -471,8 +553,8 @@ function App() {
             clearSelection={clearSelection}
             handleBulkDelete={handleBulkDelete}
             handleClearAll={handleClearAll}
+            handleBulkCopy={handleBulkCopy}
           />
-
           {/* CANDIDATE LIST */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24 scroll-smooth">
             {processedCandidates.map((person) => (
@@ -499,7 +581,6 @@ function App() {
         <div className={`flex-1 bg-zinc-100 relative flex flex-col h-full overflow-hidden
             ${showMobilePreview ? 'fixed inset-0 z-50 bg-white' : 'hidden lg:flex'}
         `}>
-
           <PDFViewer
             previewUrl={previewUrl}
             fileType={fileType}
@@ -510,7 +591,6 @@ function App() {
             editingCandidate={editingCandidate}
             onClear={handleClearPreview}
           />
-
           {/* DESKTOP SPLIT EDIT */}
           <AnimatePresence>
             {editingCandidate && (
@@ -531,7 +611,6 @@ function App() {
               </motion.div>
             )}
           </AnimatePresence>
-
           {/* MOBILE ACTION BAR */}
           {showMobilePreview && selectedPerson && !editingCandidate && (
             <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-4 shadow-[0_-5px_30px_rgba(0,0,0,0.1)] z-50 lg:hidden">
@@ -582,14 +661,10 @@ function App() {
     </div>
   )
 }
-
 export default App
 
-// ==================== COMPONENTS ====================
-// You can move these to separate files in src/components/ folder
-
-// Navbar Component
-const Navbar = ({ handleExport, selectedCount, selectMode }) => {
+// ==================== UPDATED NAVBAR ====================
+const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick }) => {
   return (
     <nav className="flex-none border-b-2 border-zinc-100 px-6 h-16 flex items-center justify-between z-20 bg-white">
       <div className="flex items-center gap-2">
@@ -602,6 +677,16 @@ const Navbar = ({ handleExport, selectedCount, selectMode }) => {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* PWA INSTALL BUTTON */}
+        {deferredPrompt && (
+          <button
+            onClick={handleInstallClick}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition shadow-sm animate-pulse"
+          >
+            <FaDownload /> Install App
+          </button>
+        )}
+
         <button
           onClick={handleExport}
           className="hidden sm:flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase"
@@ -642,14 +727,13 @@ const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll,handleExitMode, clearSelection, handleBulkDelete, handleClearAll
+  toggleSelectAll, handleExitMode, clearSelection, handleBulkDelete,
+  handleBulkCopy 
 }) => {
-  const unlockedCount = processedCandidates.filter(c => !c.locked).length
-  const allSelected = selectedIds.length === unlockedCount && unlockedCount > 0
-
   return (
     <div className="flex-none p-6 space-y-4 border-b border-zinc-100">
-      {/* Upload Controls */}
+      
+      {/* 1. UPLOAD CONTROLS */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <input
@@ -696,7 +780,7 @@ const ControlPanel = ({
         </div>
       )}
 
-      {/* Search & Sort */}
+      {/* 2. SEARCH & SORT */}
       <div className="relative">
         <FaSearch className="absolute left-3 top-3 text-zinc-400" size={12} />
         <input
@@ -718,34 +802,46 @@ const ControlPanel = ({
         </select>
       </div>
 
+      {/* 3. CLEAN ACTION GRID (Copy & Select Only) */}
       <div className='grid grid-cols-2 gap-2'>
 
-        {/* Clear All Button */}
-        <button
-          onClick={handleClearAll}
-          className="w-full py-2 bg-white text-red-600 border-2 border-red-200 rounded text-xs font-bold uppercase hover:bg-red-50 hover:border-red-400 transition"
-        >
-          Clear All Candidates
-        </button>
+        {/* DYNAMIC COPY BUTTON */}
+        {selectMode ? (
+          <button
+            onClick={() => handleBulkCopy('selected')}
+            disabled={selectedIds.length === 0}
+            className="w-full py-2 bg-black text-white border-2 border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <FaCopy /> Copy ({selectedIds.length})
+          </button>
+        ) : (
+          <button
+            onClick={() => handleBulkCopy('all')}
+            disabled={processedCandidates.length === 0}
+            className="w-full py-2 bg-white text-black border-2 border-black rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-2"
+          >
+            <FaCopy /> Copy All
+          </button>
+        )}
 
-        {/* Selection Mode Controls (Mobile Optimized - 3 Buttons Max) */}
+        {/* SELECTION CONTROLS */}
         <div className="flex gap-2">
-          {/* BUTTON 1: EXIT / SELECT */}
+          {/* Button A: Select/Exit */}
           <button
             onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
             className={`py-2 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-2
             ${selectMode
-                ? 'px-3 bg-black text-white border-black' // Compact X
-                : 'flex-1 bg-white text-black border-zinc-200 hover:border-black' // Wide Select
+                ? 'px-3 bg-red-100 text-red-600 border-red-200 hover:border-red-500' 
+                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800' 
               }`}
-            title={selectMode ? "Exit Selection" : "Enter Selection Mode"}
+            title={selectMode ? "Exit Selection" : "Select Candidates"}
           >
             {selectMode ? <FaTimes size={14} /> : 'Select'}
           </button>
 
           {selectMode && (
             <>
-              {/* BUTTON 2: ALL / NONE (Acts as Clear) */}
+              {/* Button B: All/None */}
               <button
                 onClick={toggleSelectAll}
                 className="flex-1 px-3 py-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate"
@@ -753,11 +849,11 @@ const ControlPanel = ({
                 {selectedIds.length > 0 ? 'None' : 'All'}
               </button>
 
-              {/* BUTTON 3: DELETE (Only shows when needed, keeping layout clean) */}
+              {/* Button C: Delete (Smart Trigger) */}
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedIds.length === 0}
-                className={`px-4 py-2 text-white text-xs font-bold uppercase rounded transition
+                className={`px-3 py-2 text-white text-xs font-bold uppercase rounded transition
                 ${selectedIds.length > 0
                     ? 'bg-red-500 hover:bg-red-600'
                     : 'bg-zinc-300 cursor-not-allowed'}`}
@@ -767,7 +863,6 @@ const ControlPanel = ({
             </>
           )}
         </div>
-
       </div>
     </div>
   )
