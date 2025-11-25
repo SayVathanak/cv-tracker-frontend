@@ -596,7 +596,7 @@ function App() {
             {editingCandidate && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "45%", opacity: 1 }}
+                animate={{ height: "50%", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }}
                 className="hidden lg:flex bg-white border-t-4 border-black flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-20"
@@ -644,7 +644,7 @@ function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="h-[75%] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden border-t border-zinc-200 mt-auto"
+              className="h-[50%] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden border-t border-zinc-200 mt-auto"
             >
               <EditForm
                 editingCandidate={editingCandidate}
@@ -663,40 +663,40 @@ function App() {
 }
 export default App
 
-// ==================== UPDATED NAVBAR ====================
+// ==================== COMPACT NAVBAR ====================
 const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick }) => {
   return (
-    <nav className="flex-none border-b-2 border-zinc-100 px-6 h-16 flex items-center justify-between z-20 bg-white">
+    <nav className="flex-none border-b border-zinc-200 px-4 h-12 flex items-center justify-between z-20 bg-white shadow-sm">
       <div className="flex items-center gap-2">
-        <div className="bg-black text-white p-2 rounded cursor-pointer">
-          <FaRobot size={18} />
+        <div className="bg-black text-white p-1.5 rounded cursor-pointer">
+          <FaRobot size={14} />
         </div>
-        <span className="font-bold text-xl tracking-tight">
+        <span className="font-bold text-lg tracking-tight">
           CV<span className="text-zinc-400">Tracker</span>
         </span>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* PWA INSTALL BUTTON */}
         {deferredPrompt && (
           <button
             onClick={handleInstallClick}
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition shadow-sm animate-pulse"
+            className="flex items-center gap-2 px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition shadow-sm animate-pulse"
           >
-            <FaDownload /> Install App
+            <FaDownload /> Install
           </button>
         )}
 
         <button
           onClick={handleExport}
-          className="hidden sm:flex items-center gap-2 px-4 py-2 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase"
+          className="hidden sm:flex items-center gap-2 px-3 py-1 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase"
         >
           <FaFileExcel />
           Export {selectedCount > 0 ? `(${selectedCount})` : ''}
         </button>
 
-        <div className="text-xs font-bold text-black border border-zinc-200 px-3 py-1.5 rounded flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+        <div className="text-xs font-bold text-black border border-zinc-200 px-2 py-1 rounded flex items-center gap-2">
+          <span className={`w-1.5 h-1.5 rounded-full ${selectMode ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`}></span>
           {selectMode ? `${selectedCount} SELECTED` : 'ONLINE'}
         </div>
       </div>
@@ -704,10 +704,10 @@ const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handl
   )
 }
 
-// StatsPanel Component
+// ==================== COMPACT STATS PANEL ====================
 const StatsPanel = ({ stats }) => {
   return (
-    <div className="flex-none p-6 border-b border-zinc-100 grid grid-cols-3 gap-4">
+    <div className="flex-none p-3 border-b border-zinc-100 grid grid-cols-3 gap-2 bg-zinc-50/50">
       <StatItem label="Candidates" val={stats.total} />
       <StatItem label="Top Region" val={stats.topLocation} />
       <StatItem label="Top School" val={stats.topSchool} />
@@ -718,22 +718,22 @@ const StatsPanel = ({ stats }) => {
 const StatItem = ({ label, val }) => (
   <div>
     <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">{label}</p>
-    <p className="text-md font-medium text-black truncate" title={val}>{val}</p>
+    <p className="text-sm font-semibold text-black truncate" title={val}>{val}</p>
   </div>
 )
 
-// ControlPanel Component
+// ==================== COMPACT CONTROL PANEL ====================
 const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
   toggleSelectAll, handleExitMode, clearSelection, handleBulkDelete,
-  handleBulkCopy 
+  handleBulkCopy
 }) => {
   return (
-    <div className="flex-none p-6 space-y-4 border-b border-zinc-100">
+    <div className="flex-none p-3 space-y-2 border-b border-zinc-100 bg-white">
       
-      {/* 1. UPLOAD CONTROLS */}
+      {/* 1. UPLOAD CONTROLS (Compact) */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <input
@@ -745,120 +745,120 @@ const ControlPanel = ({
           />
           <label
             htmlFor="fileInput"
-            className="w-full h-10 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent hover:border-black rounded text-xs font-bold uppercase cursor-pointer transition"
+            className="w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent hover:border-black rounded text-xs font-bold uppercase cursor-pointer transition text-zinc-600 hover:text-black"
           >
             {files.length > 0 ? (
               <><FaCheck /> {files.length} Files</>
             ) : (
-              <><FaCloudUploadAlt /> Select PDFs</>
+              <><FaCloudUploadAlt /> Upload PDFs</>
             )}
           </label>
         </div>
 
         {files.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <button
               onClick={handleUpload}
               disabled={loading}
-              className="px-6 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50"
+              className="px-4 h-8 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50"
             >
               {loading ? "..." : "Upload"}
             </button>
             <button
               onClick={handleClearFiles}
-              className="px-4 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"
+              className="px-2 h-8 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"
             >
-              <FaTrash />
+              <FaTrash size={12} />
             </button>
           </div>
         )}
       </div>
 
       {status && (
-        <div className="text-xs text-center py-2 bg-zinc-50 rounded border border-zinc-200">
+        <div className="text-xs text-center py-1 bg-zinc-50 rounded border border-zinc-200 text-zinc-500">
           {status}
         </div>
       )}
 
-      {/* 2. SEARCH & SORT */}
+      {/* 2. SEARCH & SORT (Compact h-8) */}
       <div className="relative">
-        <FaSearch className="absolute left-3 top-3 text-zinc-400" size={12} />
+        <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
         <input
           type="text"
-          placeholder="Search..."
-          className="w-full pl-9 pr-24 h-10 bg-white border border-zinc-200 rounded text-sm font-medium focus:ring-1 focus:ring-black focus:border-black outline-none transition"
+          placeholder="Search candidates..."
+          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black focus:border-black outline-none transition placeholder:text-zinc-400"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
         <select
-          className="absolute right-1 top-1 bottom-1 px-2 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black"
+          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black"
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
         >
           <option value="newest">Newest</option>
           <option value="nameAsc">A-Z</option>
           <option value="nameDesc">Z-A</option>
-          <option value="schoolAsc">By School</option>
+          <option value="schoolAsc">School</option>
         </select>
       </div>
 
-      {/* 3. CLEAN ACTION GRID (Copy & Select Only) */}
-      <div className='grid grid-cols-2 gap-2'>
+      {/* 3. ACTION GRID (Compact Buttons) */}
+      <div className='grid grid-cols-2 gap-2 pt-1'>
 
-        {/* DYNAMIC COPY BUTTON */}
+        {/* COPY BUTTON */}
         {selectMode ? (
           <button
             onClick={() => handleBulkCopy('selected')}
             disabled={selectedIds.length === 0}
-            className="w-full py-2 bg-black text-white border-2 border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full h-8 bg-black text-white border border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
           >
-            <FaCopy /> Copy ({selectedIds.length})
+            <FaCopy size={10} /> Copy ({selectedIds.length})
           </button>
         ) : (
           <button
             onClick={() => handleBulkCopy('all')}
             disabled={processedCandidates.length === 0}
-            className="w-full py-2 bg-white text-black border-2 border-black rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-2"
+            className="w-full h-8 bg-white text-black border border-zinc-300 hover:border-black rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5"
           >
-            <FaCopy /> Copy All
+            <FaCopy size={10} /> Copy All
           </button>
         )}
 
         {/* SELECTION CONTROLS */}
-        <div className="flex gap-2">
-          {/* Button A: Select/Exit */}
+        <div className="flex gap-1.5">
+          {/* Select/Exit Toggle */}
           <button
             onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
-            className={`py-2 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-2
+            className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1
             ${selectMode
-                ? 'px-3 bg-red-100 text-red-600 border-red-200 hover:border-red-500' 
-                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800' 
+                ? 'w-8 bg-red-50 text-red-600 border-red-200 hover:border-red-500' // Small Exit Button
+                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800' // Wide Select Button
               }`}
             title={selectMode ? "Exit Selection" : "Select Candidates"}
           >
-            {selectMode ? <FaTimes size={14} /> : 'Select'}
+            {selectMode ? <FaTimes size={12} /> : 'Select'}
           </button>
 
           {selectMode && (
             <>
-              {/* Button B: All/None */}
+              {/* All/None Toggle */}
               <button
                 onClick={toggleSelectAll}
-                className="flex-1 px-3 py-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate"
+                className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white"
               >
                 {selectedIds.length > 0 ? 'None' : 'All'}
               </button>
 
-              {/* Button C: Delete (Smart Trigger) */}
+              {/* Delete Button */}
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedIds.length === 0}
-                className={`px-3 py-2 text-white text-xs font-bold uppercase rounded transition
+                className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition
                 ${selectedIds.length > 0
                     ? 'bg-red-500 hover:bg-red-600'
-                    : 'bg-zinc-300 cursor-not-allowed'}`}
+                    : 'bg-zinc-200 cursor-not-allowed'}`}
               >
-                <FaTrash />
+                <FaTrash size={10} />
               </button>
             </>
           )}
@@ -868,7 +868,7 @@ const ControlPanel = ({
   )
 }
 
-// CandidateCard Component
+// ==================== COMPACT CANDIDATE CARD ====================
 const CandidateCard = ({
   person, expandedId, selectedIds, selectMode, copiedId,
   handleCardClick, toggleSelection, toggleLock, startEditing,
@@ -880,95 +880,105 @@ const CandidateCard = ({
   return (
     <div
       onClick={() => handleCardClick(person)}
-      className={`group p-5 rounded border cursor-pointer overflow-hidden transition-all duration-200
-        ${isExpanded ? 'bg-zinc-50 border-black ring-1 ring-black' : 'bg-white border-zinc-200 hover:border-zinc-400'}
-        ${isSelected && selectMode ? 'ring-2 ring-blue-500 border-blue-500' : ''}
+      className={`group p-3 rounded border cursor-pointer overflow-hidden transition-all duration-200
+        ${isExpanded ? 'bg-zinc-50 border-black ring-1 ring-black shadow-sm' : 'bg-white border-zinc-200 hover:border-zinc-400'}
+        ${isSelected && selectMode ? 'ring-1 ring-blue-500 border-blue-500 bg-blue-50/10' : ''}
       `}
     >
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-3">
+      {/* HEADER: AVATAR + NAME + ACTIONS */}
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center gap-2.5">
+          {/* 1. SELECTION / AVATAR */}
           {selectMode ? (
             <button
               onClick={(e) => { e.stopPropagation(); toggleSelection(person._id); }}
-              className="w-10 h-10 flex items-center justify-center border rounded transition-colors"
+              className={`w-8 h-8 flex items-center justify-center border rounded transition-all
+                ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-zinc-300'}`}
             >
-              {isSelected ? (
-                <FaCheck className="text-blue-500" size={20} />
-              ) : (
-                <div className="w-5 h-5 border-2 border-zinc-300 rounded"></div>
-              )}
+              {isSelected && <FaCheck size={12} />}
             </button>
           ) : (
-            <div className={`w-10 h-10 flex items-center justify-center text-sm font-bold border transition-colors
+            <div className={`w-8 h-8 flex items-center justify-center text-xs font-bold border rounded transition-colors
               ${isExpanded ? 'bg-black text-white border-black' : 'bg-white text-black border-zinc-200'}`}>
               {person.Name.charAt(0).toUpperCase()}
             </div>
           )}
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium text-black uppercase">{person.Name}</h3>
-              {person.locked && <FaLock className="text-amber-500" size={10} />}
+          {/* 2. NAME & SCHOOL */}
+          <div className="overflow-hidden">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-xs font-semibold text-black uppercase truncate leading-none">
+                {person.Name}
+              </h3>
+              {person.locked && <FaLock className="text-amber-500 shrink-0" size={8} />}
             </div>
-            <p className="text-xs text-zinc-500 font-medium">{person.School}</p>
+            <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">
+              {person.School || "N/A"}
+            </p>
           </div>
         </div>
 
+        {/* 3. QUICK ACTIONS (Only visible in normal mode) */}
         {!selectMode && (
-          <div className="flex gap-1 z-10">
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               onClick={(e) => toggleLock(person, e)}
-              className={`p-2 rounded transition border
+              className={`p-1.5 rounded transition border
                 ${person.locked
-                  ? 'text-amber-500 border-amber-200 hover:border-amber-500 bg-amber-50'
+                  ? 'text-amber-600 border-amber-200 bg-amber-50'
                   : 'text-zinc-400 hover:text-black bg-white border-zinc-100 hover:border-black'
                 }`}
               title={person.locked ? 'Unlock' : 'Lock'}
             >
-              {person.locked ? <FaLock size={12} /> : <FaUnlock size={12} />}
+              {person.locked ? <FaLock size={10} /> : <FaUnlock size={10} />}
             </button>
             <button
               onClick={(e) => startEditing(person, e)}
-              className="p-2 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition"
+              className="p-1.5 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition"
             >
-              <FaEdit />
+              <FaEdit size={10} />
             </button>
             <button
               onClick={(e) => handleDelete(person._id, person.Name, e)}
-              className="p-2 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition"
+              className="p-1.5 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition"
               disabled={person.locked}
             >
-              <FaTrash size={12} />
+              <FaTrash size={10} />
             </button>
           </div>
         )}
       </div>
 
-      <div className="space-y-2 text-sm text-zinc-700">
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <span className="flex items-center gap-2">
-            <FaPhoneAlt className="text-zinc-400" /> {person.Tel}
+      {/* BODY: INFO GRID */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-zinc-600">
+          <span className="flex items-center gap-1.5 truncate">
+            <FaPhoneAlt className="text-zinc-400 shrink-0" size={10} /> 
+            {person.Tel}
           </span>
-          <span className="flex items-center gap-2">
-            <FaBirthdayCake className="text-zinc-400" /> {person.Birth || 'N/A'}
+          <span className="flex items-center gap-1.5 truncate">
+            <FaBirthdayCake className="text-zinc-400 shrink-0" size={10} /> 
+            {person.Birth || 'N/A'}
           </span>
-          <span className="flex items-center gap-2">
-            <FaVenusMars className="text-zinc-400" /> {person.Gender || 'N/A'}
+          <span className="flex items-center gap-1.5 truncate">
+            <FaVenusMars className="text-zinc-400 shrink-0" size={10} /> 
+            {person.Gender || 'N/A'}
           </span>
         </div>
 
-        <div className="flex items-start gap-2 text-xs pt-1">
-          <FaMapMarkerAlt className="text-zinc-400 mt-0.5 shrink-0" />
-          <span className="leading-relaxed">{person.Location}</span>
+        <div className="flex items-start gap-1.5 text-xs text-zinc-600">
+          <FaMapMarkerAlt className="text-zinc-400 mt-0.5 shrink-0" size={10} />
+          <span className="leading-tight line-clamp-1">{person.Location}</span>
         </div>
 
+        {/* EXPANDED SECTION */}
         {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-zinc-200 animate-fade-in">
-            <div className="mb-4">
+          <div className="mt-2 pt-2 border-t border-zinc-200 animate-fade-in">
+            <div className="mb-2">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 Experience
               </span>
-              <p className="text-xs italic text-zinc-600 leading-relaxed bg-white p-3 border border-zinc-100 rounded">
+              <p className="text-xs italic text-zinc-600 leading-relaxed bg-white p-2 border border-zinc-200 rounded max-h-24 overflow-y-auto">
                 {person.Experience || "No experience listed."}
               </p>
             </div>
@@ -976,20 +986,23 @@ const CandidateCard = ({
             <div className="flex gap-2">
               <button
                 onClick={(e) => handleOpenPdfMobile(e, person)}
-                className="flex-1 lg:hidden py-3 bg-white text-black text-xs font-bold uppercase tracking-wider rounded border border-black flex items-center justify-center gap-2 hover:bg-zinc-100"
+                className="flex-1 lg:hidden h-8 bg-white text-black text-xs font-bold uppercase tracking-wider rounded border border-black flex items-center justify-center gap-2 hover:bg-zinc-100"
               >
-                <FaFilePdf /> View Doc
+                <FaFilePdf size={12} /> View Doc
               </button>
 
               <button
                 onClick={(e) => handleCopy(person, e)}
-                className={`flex-2 py-3 text-xs font-bold uppercase tracking-wider rounded border transition flex items-center justify-center gap-2
+                className={`flex-2 h-8 px-3 text-xs font-bold uppercase tracking-wider rounded border transition flex items-center justify-center gap-2 w-full
                 ${copiedId === person._id
                     ? 'bg-green-600 border-green-600 text-white'
                     : 'bg-black border-black text-white hover:bg-zinc-800'
                   }`}
               >
-                {copiedId === person._id ? <><FaCheck /> Copied</> : <><FaCopy /> Copy Data</>}
+                {copiedId === person._id 
+                  ? <><FaCheck size={12} /> Copied</> 
+                  : <><FaCopy size={12} /> Copy Data</>
+                }
               </button>
             </div>
           </div>
@@ -1207,7 +1220,7 @@ const EditForm = ({
             onChange={handleEditChange}
           />
 
-          <div className="col-span-2">
+          <div className="col-span-1">
             <SolidInput
               label="School"
               name="School"
@@ -1235,7 +1248,7 @@ const EditForm = ({
         <div className="p-4 border-t border-zinc-100">
           <button
             onClick={saveEdit}
-            className="w-full py-3 bg-black text-white font-bold uppercase tracking-wider rounded"
+            className="w-full py-3 text-sm bg-black text-white font-bold uppercase tracking-wider rounded"
           >
             Save Changes
           </button>
