@@ -492,7 +492,7 @@ function App() {
         <div className={`flex flex-col w-full lg:w-[500px] xl:w-[550px] border-r border-zinc-200 h-full transition-all duration-300 z-10 bg-white
           ${showMobilePreview ? 'hidden lg:flex' : 'flex'}
         `}>
-          <StatsPanel stats={stats} />
+          <StatsPanel stats={stats} loading={loading}/>
           <ControlPanel
             files={files}
             loading={loading}
@@ -724,19 +724,26 @@ const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handl
 }
 
 // ==================== STATS PANEL ====================
-const StatsPanel = ({ stats }) => {
+const StatsPanel = ({ stats, loading }) => {
   return (
     <div className="flex-none p-3 border-b border-zinc-100 grid grid-cols-3 gap-2 bg-zinc-50/50">
-      <StatItem label="Candidates" val={stats.total} />
-      <StatItem label="Top Region" val={stats.topLocation} />
-      <StatItem label="Top School" val={stats.topSchool} />
+      <StatItem label="Candidates" val={stats.total} loading={loading} />
+      <StatItem label="Top Region" val={stats.topLocation} loading={loading} />
+      <StatItem label="Top School" val={stats.topSchool} loading={loading} />
     </div>
   )
 }
-const StatItem = ({ label, val }) => (
+
+const StatItem = ({ label, val, loading }) => (
   <div>
     <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">{label}</p>
-    <p className="text-sm font-semibold text-black truncate" title={val}>{val}</p>
+    {loading ? (
+      <div className="h-5 flex items-center">
+        <span className="text-xl leading-none text-zinc-400 animate-pulse pb-2 tracking-widest">...</span>
+      </div>
+    ) : (
+      <p className="text-sm font-semibold text-black truncate" title={val}>{val}</p>
+    )}
   </div>
 )
 
