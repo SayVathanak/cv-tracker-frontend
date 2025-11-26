@@ -13,10 +13,37 @@ import {
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaEye, FaChevronDown, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
-  FaDownload
+  FaDownload, FaSpinner
 } from 'react-icons/fa'
+import { BsXLg, BsX } from "react-icons/bs";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+
+// --- HELPER: DATE FORMATTER (DD-Mon-YYYY) ---
+const formatDOB = (dateString) => {
+  if (!dateString || dateString === "N/A") return "N/A"
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+  // 1. Handle "YYYY-MM-DD" (Standard Database Format)
+  const isoMatch = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoMatch) {
+    const [_, year, month, day] = isoMatch
+    // Convert "03" -> Index 2 -> "Mar"
+    const monthName = months[parseInt(month) - 1]
+    return `${day}-${monthName}-${year}`
+  }
+
+  // 2. Handle Other Formats (e.g. "April 26, 2004")
+  const date = new Date(dateString)
+  if (isNaN(date.getTime())) return dateString
+
+  const d = String(date.getDate()).padStart(2, '0')
+  const m = months[date.getMonth()] // getMonth() returns 0-11
+  const y = date.getFullYear()
+
+  return `${d}-${m}-${y}`
+}
 
 function App() {
   // --- STATE ---
@@ -27,6 +54,9 @@ function App() {
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
 
   // Selection State
   const [selectedIds, setSelectedIds] = useState([])
@@ -53,7 +83,7 @@ function App() {
     ? 'http://127.0.0.1:8000'
     : 'https://cv-tracker-api.onrender.com'
 
-  useEffect(() => { fetchCandidates() }, [])
+  useEffect(() => { fetchCandidates(1) }, [])
 
   // --- PWA INSTALL EFFECT ---
   useEffect(() => {
@@ -64,6 +94,17 @@ function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
   }, [])
+
+  // --- AUTO-SEARCH EFFECT ---
+  useEffect(() => {
+    // Wait 500ms after user stops typing before calling server
+    const delayDebounceFn = setTimeout(() => {
+      // Always reset to Page 1 when searching
+      fetchCandidates(1, searchTerm)
+    }, 500)
+
+    return () => clearTimeout(delayDebounceFn)
+  }, [searchTerm]) // Runs whenever searchTerm changes
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return
@@ -76,11 +117,27 @@ function App() {
   }
 
   // --- API FUNCTIONS ---
-  const fetchCandidates = async () => {
+  const fetchCandidates = async (page = 1, search = searchTerm) => {
+    setLoading(true)
     try {
-      const res = await axios.get(`${API_URL}/candidates`)
-      setCandidates(res.data)
-    } catch (error) { console.error(error) }
+      // Send the search term to the backend
+      const res = await axios.get(`${API_URL}/candidates`, {
+        params: {
+          page: page,
+          limit: 20,
+          search: search // <--- Send it here
+        }
+      })
+
+      setCandidates(res.data.data)
+      setCurrentPage(res.data.page)
+      setTotalItems(res.data.total)
+      setTotalPages(Math.ceil(res.data.total / res.data.limit))
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const getMostFrequent = (arr, key) => {
@@ -101,22 +158,29 @@ function App() {
     topSchool: getMostFrequent(candidates, "School")
   }
 
-  const processedCandidates = candidates
-    .filter(person => {
-      const term = searchTerm.toLowerCase()
-      return (
-        person.Name.toLowerCase().includes(term) ||
-        person.Tel.toLowerCase().includes(term) ||
-        person.School.toLowerCase().includes(term) ||
-        person.Location.toLowerCase().includes(term)
-      )
-    })
-    .sort((a, b) => {
-      if (sortOption === "nameAsc") return a.Name.localeCompare(b.Name)
-      if (sortOption === "nameDesc") return b.Name.localeCompare(a.Name)
-      if (sortOption === "schoolAsc") return a.School.localeCompare(b.School)
-      return 0
-    })
+  const processedCandidates = candidates.sort((a, b) => {
+    // 1. Name
+    if (sortOption === "nameAsc") return a.Name.localeCompare(b.Name)
+    if (sortOption === "nameDesc") return b.Name.localeCompare(a.Name)
+
+    // 2. School
+    if (sortOption === "schoolAsc") return a.School.localeCompare(b.School)
+
+    // 3. Gender
+    if (sortOption === "genderAsc") return (a.Gender || "z").localeCompare(b.Gender || "z")
+    if (sortOption === "genderDesc") return (b.Gender || "").localeCompare(a.Gender || "")
+
+    // 4. Address/Location
+    if (sortOption === "locationAsc") return (a.Location || "z").localeCompare(b.Location || "z")
+    if (sortOption === "locationDesc") return (b.Location || "").localeCompare(a.Location || "")
+
+    // 5. Time (Newest vs Oldest)
+    if (sortOption === "oldest") return a._id.localeCompare(b._id) // Smallest ID = Oldest
+    if (sortOption === "newest") return b._id.localeCompare(a._id) // Largest ID = Newest
+
+    // Default fallback
+    return 0
+  })
 
   const MySwal = withReactContent(Swal)
   const Toast = Swal.mixin({
@@ -140,7 +204,7 @@ function App() {
 
   const toggleSelectAll = () => {
     if (selectedIds.length > 0) {
-      setSelectedIds([]) 
+      setSelectedIds([])
     } else {
       const unlocked = processedCandidates.filter(c => !c.locked).map(c => c._id)
       setSelectedIds(unlocked)
@@ -306,7 +370,7 @@ function App() {
         try {
           // Send empty array [] to trigger "Delete All" mode in backend
           const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
-            candidate_ids: [], 
+            candidate_ids: [],
             passcode: passcode
           })
 
@@ -408,7 +472,7 @@ function App() {
       Name: c.Name,
       Gender: c.Gender,
       Phone: c.Tel,
-      Birth: c.Birth,
+      Birth: formatDOB(c.Birth),
       Location: c.Location,
       School: c.School,
       Experience: c.Experience
@@ -471,7 +535,7 @@ function App() {
 
     const text = formatCandidateText([person])
     navigator.clipboard.writeText(text)
-    
+
     setCopiedId(person._id)
     setTimeout(() => setCopiedId(null), 2000)
     Toast.fire({ icon: 'success', title: 'Copied to clipboard' })
@@ -496,35 +560,45 @@ function App() {
 
     const text = formatCandidateText(candidatesToCopy)
     navigator.clipboard.writeText(text)
-    
-    Toast.fire({ 
-      icon: 'success', 
-      title: `Copied ${candidatesToCopy.length} candidates!` 
+
+    Toast.fire({
+      icon: 'success',
+      title: `Copied ${candidatesToCopy.length} candidates!`
     })
-    
+
     // Optional: Clear selection after copying
     if (mode === 'selected') {
-        clearSelection()
+      clearSelection()
     }
   }
 
   const formatDateForInput = (dateString) => {
     if (!dateString) return ""
+
+    // 1. If it is already perfect (YYYY-MM-DD), send it back.
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString
+
     const date = new Date(dateString)
     if (isNaN(date.getTime())) return ""
-    return date.toISOString().split('T')[0]
+
+    // 2. FIX: Use getFullYear/getMonth/getDate (Local Time) 
+    // instead of getUTCFullYear (London Time)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0') // +1 because Jan is 0
+    const d = String(date.getDate()).padStart(2, '0')      // .getDate() is Local Day
+
+    return `${y}-${m}-${d}`
   }
 
   // --- RENDER ---
   return (
-    <div className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden">
+    <div className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden select-none">
       <Navbar
         handleExport={handleExport}
         selectedCount={selectedIds.length}
         selectMode={selectMode}
-        deferredPrompt={deferredPrompt}      
-        handleInstallClick={handleInstallClick} 
+        deferredPrompt={deferredPrompt}
+        handleInstallClick={handleInstallClick}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
@@ -555,26 +629,84 @@ function App() {
             handleClearAll={handleClearAll}
             handleBulkCopy={handleBulkCopy}
           />
+
           {/* CANDIDATE LIST */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24 scroll-smooth">
-            {processedCandidates.map((person) => (
-              <CandidateCard
-                key={person._id}
-                person={person}
-                expandedId={expandedId}
-                selectedIds={selectedIds}
-                selectMode={selectMode}
-                copiedId={copiedId}
-                handleCardClick={handleCardClick}
-                toggleSelection={toggleSelection}
-                toggleLock={toggleLock}
-                startEditing={startEditing}
-                handleDelete={handleDelete}
-                handleCopy={handleCopy}
-                handleOpenPdfMobile={handleOpenPdfMobile}
-              />
-            ))}
+
+            {/* --- NEW LOADING STATE --- */}
+            {loading ? (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4 pt-20">
+                <FaSpinner className="animate-spin text-lg text-black/50" />
+                <div className="text-center">
+                  <p className="text-xs font-bold uppercase tracking-widest text-black">
+                    Loading Database
+                  </p>
+                  <p className="text-xs mt-1">
+                    Please wait...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* --- EXISTING LIST --- */
+              processedCandidates.length > 0 ? (
+                processedCandidates.map((person) => (
+                  <CandidateCard
+                    key={person._id}
+                    person={person}
+                    expandedId={expandedId}
+                    selectedIds={selectedIds}
+                    selectMode={selectMode}
+                    copiedId={copiedId}
+                    handleCardClick={handleCardClick}
+                    toggleSelection={toggleSelection}
+                    toggleLock={toggleLock}
+                    startEditing={startEditing}
+                    handleDelete={handleDelete}
+                    handleCopy={handleCopy}
+                    handleOpenPdfMobile={handleOpenPdfMobile}
+                  />
+                ))
+              ) : (
+                /* --- EMPTY STATE (If no candidates found) --- */
+                <div className="text-center py-10 text-zinc-400 text-xs">
+                  No candidates found.
+                </div>
+              )
+            )}
           </div>
+
+          {/* --- PAGINATION CONTROLS --- */}
+          <div className="flex-none p-4 border-t border-zinc-200 bg-zinc-50 flex justify-between items-center z-10">
+
+            {/* Previous Button */}
+            <button
+              onClick={() => fetchCandidates(currentPage - 1)}
+              disabled={currentPage === 1 || loading}
+              className="px-4 py-2 bg-white border border-zinc-300 rounded text-xs font-bold uppercase hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              &larr; Prev
+            </button>
+
+            {/* Page Info */}
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold text-black">
+                Page {currentPage} of {totalPages}
+              </span>
+              <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">
+                {totalItems} Candidates Total
+              </span>
+            </div>
+
+            {/* Next Button */}
+            <button
+              onClick={() => fetchCandidates(currentPage + 1)}
+              disabled={currentPage === totalPages || loading}
+              className="px-4 py-2 bg-black text-white border border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Next &rarr;
+            </button>
+          </div>
+
         </div>
 
         {/* RIGHT PANEL */}
@@ -689,7 +821,7 @@ const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handl
 
         <button
           onClick={handleExport}
-          className="hidden sm:flex items-center gap-2 px-3 py-1 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase"
+          className="flex items-center gap-2 px-3 py-1 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase"
         >
           <FaFileExcel />
           Export {selectedCount > 0 ? `(${selectedCount})` : ''}
@@ -730,10 +862,53 @@ const ControlPanel = ({
   toggleSelectAll, handleExitMode, clearSelection, handleBulkDelete,
   handleBulkCopy
 }) => {
+
+  const [isDragging, setIsDragging] = useState(false)
+
+  // 1. Move Drag Events to the MAIN container
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    // Only stop dragging if we left the main container
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileChange({ target: { files: e.dataTransfer.files } })
+    }
+  }
+
   return (
-    <div className="flex-none p-3 space-y-2 border-b border-zinc-100 bg-white">
-      
-      {/* 1. UPLOAD CONTROLS (Compact) */}
+    <div
+      // 2. Apply drag handlers here, to the whole panel
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`relative flex-none p-3 space-y-2 border-b border-zinc-100 bg-white transition-colors duration-200
+        ${isDragging ? 'bg-blue-50' : ''} 
+      `}
+    >
+
+      {/* --- 3. THE MAGIC OVERLAY (Visible only when dragging) --- */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-50/90 border-2 border-dashed border-blue-500 m-2 rounded-lg pointer-events-none">
+          <div className="text-center">
+            <FaCloudUploadAlt className="text-4xl text-blue-500 mx-auto mb-2" />
+            <p className="text-md font-semibold text-blue-600 uppercase tracking-widest">Drop Files Here</p>
+          </div>
+        </div>
+      )}
+
+      {/* --- STANDARD UI (Stays essentially the same) --- */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <input
@@ -745,10 +920,10 @@ const ControlPanel = ({
           />
           <label
             htmlFor="fileInput"
-            className="w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent hover:border-black rounded text-xs font-bold uppercase cursor-pointer transition text-zinc-600 hover:text-black"
+            className="w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent hover:border-black rounded text-xs font-bold uppercase cursor-pointer transition text-zinc-600 hover:text-black select-none"
           >
             {files.length > 0 ? (
-              <><FaCheck /> {files.length} Files</>
+              <><FaCheck /> {files.length} Files Ready</>
             ) : (
               <><FaCloudUploadAlt /> Upload PDFs</>
             )}
@@ -780,7 +955,6 @@ const ControlPanel = ({
         </div>
       )}
 
-      {/* 2. SEARCH & SORT (Compact h-8) */}
       <div className="relative">
         <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
         <input
@@ -796,16 +970,18 @@ const ControlPanel = ({
           onChange={(e) => setSortOption(e.target.value)}
         >
           <option value="newest">Newest</option>
-          <option value="nameAsc">A-Z</option>
-          <option value="nameDesc">Z-A</option>
+          <option value="oldest">Oldest</option>
+          <option value="nameAsc">Name (A-Z)</option>
+          <option value="nameDesc">Name (Z-A)</option>
           <option value="schoolAsc">School</option>
+          <option value="genderAsc">Gender (F-M)</option>
+          <option value="genderDesc">Gender (M-F)</option>
+          <option value="locationAsc">Address (A-Z)</option>
+          <option value="locationDesc">Address (Z-A)</option>
         </select>
       </div>
 
-      {/* 3. ACTION GRID (Compact Buttons) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
-
-        {/* COPY BUTTON */}
         {selectMode ? (
           <button
             onClick={() => handleBulkCopy('selected')}
@@ -824,15 +1000,13 @@ const ControlPanel = ({
           </button>
         )}
 
-        {/* SELECTION CONTROLS */}
         <div className="flex gap-1.5">
-          {/* Select/Exit Toggle */}
           <button
             onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
             className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1
             ${selectMode
-                ? 'w-8 bg-red-50 text-red-600 border-red-200 hover:border-red-500' // Small Exit Button
-                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800' // Wide Select Button
+                ? 'w-8 bg-red-50 text-red-600 border-red-200 hover:border-red-500'
+                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800'
               }`}
             title={selectMode ? "Exit Selection" : "Select Candidates"}
           >
@@ -841,7 +1015,6 @@ const ControlPanel = ({
 
           {selectMode && (
             <>
-              {/* All/None Toggle */}
               <button
                 onClick={toggleSelectAll}
                 className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white"
@@ -849,7 +1022,6 @@ const ControlPanel = ({
                 {selectedIds.length > 0 ? 'None' : 'All'}
               </button>
 
-              {/* Delete Button */}
               <button
                 onClick={handleBulkDelete}
                 disabled={selectedIds.length === 0}
@@ -868,7 +1040,7 @@ const ControlPanel = ({
   )
 }
 
-// ==================== COMPACT CANDIDATE CARD ====================
+// ==================== CANDIDATE CARD (Clean Style) ====================
 const CandidateCard = ({
   person, expandedId, selectedIds, selectMode, copiedId,
   handleCardClick, toggleSelection, toggleLock, startEditing,
@@ -880,7 +1052,7 @@ const CandidateCard = ({
   return (
     <div
       onClick={() => handleCardClick(person)}
-      className={`group p-3 rounded border cursor-pointer overflow-hidden transition-all duration-200
+      className={`group p-3 rounded border cursor-pointer overflow-hidden transition-all duration-200 relative
         ${isExpanded ? 'bg-zinc-50 border-black ring-1 ring-black shadow-sm' : 'bg-white border-zinc-200 hover:border-zinc-400'}
         ${isSelected && selectMode ? 'ring-1 ring-blue-500 border-blue-500 bg-blue-50/10' : ''}
       `}
@@ -910,6 +1082,7 @@ const CandidateCard = ({
               <h3 className="text-xs font-semibold text-black uppercase truncate leading-none">
                 {person.Name}
               </h3>
+              {/* Lock Icon Indicator (Small) */}
               {person.locked && <FaLock className="text-amber-500 shrink-0" size={8} />}
             </div>
             <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">
@@ -918,12 +1091,21 @@ const CandidateCard = ({
           </div>
         </div>
 
-        {/* 3. QUICK ACTIONS (Only visible in normal mode) */}
+        {/* 3. ACTIONS (Top Right Icons - Mobile & Desktop) */}
         {!selectMode && (
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className={`flex gap-1 z-20 transition-all duration-200
+            ${/* VISIBILITY LOGIC:
+                - Desktop (lg): Hidden by default, Visible on Hover.
+                - Mobile: Hidden by default, Visible when Expanded. */
+            isExpanded
+              ? 'opacity-100'
+              : 'opacity-0 pointer-events-none lg:pointer-events-auto lg:group-hover:opacity-100'
+            }
+          `}>
+            {/* Lock Button */}
             <button
               onClick={(e) => toggleLock(person, e)}
-              className={`p-1.5 rounded transition border
+              className={`p-2 rounded transition border
                 ${person.locked
                   ? 'text-amber-600 border-amber-200 bg-amber-50'
                   : 'text-zinc-400 hover:text-black bg-white border-zinc-100 hover:border-black'
@@ -932,15 +1114,19 @@ const CandidateCard = ({
             >
               {person.locked ? <FaLock size={10} /> : <FaUnlock size={10} />}
             </button>
+
+            {/* Edit Button */}
             <button
               onClick={(e) => startEditing(person, e)}
-              className="p-1.5 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition"
+              className="p-2 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition"
             >
               <FaEdit size={10} />
             </button>
+
+            {/* Delete Button */}
             <button
               onClick={(e) => handleDelete(person._id, person.Name, e)}
-              className="p-1.5 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition"
+              className="p-2 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition"
               disabled={person.locked}
             >
               <FaTrash size={10} />
@@ -953,15 +1139,15 @@ const CandidateCard = ({
       <div className="space-y-1.5">
         <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-zinc-600">
           <span className="flex items-center gap-1.5 truncate">
-            <FaPhoneAlt className="text-zinc-400 shrink-0" size={10} /> 
+            <FaPhoneAlt className="text-zinc-400 shrink-0" size={10} />
             {person.Tel}
           </span>
           <span className="flex items-center gap-1.5 truncate">
-            <FaBirthdayCake className="text-zinc-400 shrink-0" size={10} /> 
-            {person.Birth || 'N/A'}
+            <FaBirthdayCake className="text-zinc-400 shrink-0" size={10} />
+            {formatDOB(person.Birth)}
           </span>
           <span className="flex items-center gap-1.5 truncate">
-            <FaVenusMars className="text-zinc-400 shrink-0" size={10} /> 
+            <FaVenusMars className="text-zinc-400 shrink-0" size={10} />
             {person.Gender || 'N/A'}
           </span>
         </div>
@@ -978,11 +1164,12 @@ const CandidateCard = ({
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 Experience
               </span>
-              <p className="text-xs italic text-zinc-600 leading-relaxed bg-white p-2 border border-zinc-200 rounded max-h-24 overflow-y-auto">
+              <p className="text-xs italic text-zinc-600 leading-relaxed bg-white p-2 border border-zinc-200 rounded max-h-32 overflow-y-auto">
                 {person.Experience || "No experience listed."}
               </p>
             </div>
 
+            {/* PRIMARY ACTIONS (View / Copy) */}
             <div className="flex gap-2">
               <button
                 onClick={(e) => handleOpenPdfMobile(e, person)}
@@ -999,12 +1186,14 @@ const CandidateCard = ({
                     : 'bg-black border-black text-white hover:bg-zinc-800'
                   }`}
               >
-                {copiedId === person._id 
-                  ? <><FaCheck size={12} /> Copied</> 
+                {copiedId === person._id
+                  ? <><FaCheck size={12} /> Copied</>
                   : <><FaCopy size={12} /> Copy Data</>
                 }
               </button>
             </div>
+
+            {/* NOTE: Bottom buttons removed as requested. Icons are now in the top right. */}
           </div>
         )}
       </div>
@@ -1013,8 +1202,8 @@ const CandidateCard = ({
 }
 
 // PDFViewer Component
-const PDFViewer = ({ 
-  previewUrl, fileType, zoom, setZoom, 
+const PDFViewer = ({
+  previewUrl, fileType, zoom, setZoom,
   showMobilePreview, setShowMobilePreview, editingCandidate,
   onClear
 }) => {
@@ -1023,8 +1212,8 @@ const PDFViewer = ({
       {/* VIEWER HEADER */}
       <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setShowMobilePreview(false)} 
+          <button
+            onClick={() => setShowMobilePreview(false)}
             className="lg:hidden p-2 -ml-2 text-black hover:bg-zinc-100 rounded transition"
           >
             <FaArrowLeft />
@@ -1033,11 +1222,11 @@ const PDFViewer = ({
             <FaFilePdf className="text-zinc-400" size={12} /> Document Preview
           </div>
         </div>
-        
+
         {previewUrl && (
           <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded p-1">
-            <button 
-              onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} 
+            <button
+              onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}
               className="p-1 text-zinc-500 hover:text-black"
             >
               <FaSearchMinus size={12} />
@@ -1045,36 +1234,36 @@ const PDFViewer = ({
             <span className="text-xs font-bold text-zinc-400 w-8 text-center">
               {Math.round(zoom * 100)}%
             </span>
-            <button 
-              onClick={() => setZoom(z => Math.min(3.0, z + 0.2))} 
+            <button
+              onClick={() => setZoom(z => Math.min(3.0, z + 0.2))}
               className="p-1 text-zinc-500 hover:text-black"
             >
               <FaSearchPlus size={12} />
             </button>
             <div className="w-px h-3 bg-zinc-200 mx-1"></div>
-            <button 
-              onClick={() => setZoom(1.0)} 
-              className="p-1 text-zinc-500 hover:text-black" 
+            <button
+              onClick={() => setZoom(1.0)}
+              className="p-1 text-zinc-500 hover:text-black"
               title="Reset Zoom"
             >
               <FaRedo size={12} />
             </button>
-            
-            {/* --- 2. NEW CLOSE BUTTON --- */}
-            <div className="w-px h-3 bg-zinc-200 mx-1"></div>
-            <button 
-              onClick={onClear} 
-              className="p-1 text-red-500 hover:bg-red-50 rounded transition" 
+
+            {/* --- 2. CLOSE BUTTON --- */}
+            <div className="hidden md:block w-px h-3 bg-zinc-200 mx-1"></div>
+            <button
+              onClick={onClear}
+              className="hidden md:flex p-1 text-red-500 hover:bg-red-50 rounded transition"
               title="Close Preview"
             >
-              <FaTimes size={12} />
+              <BsXLg size={16} />
             </button>
           </div>
         )}
       </div>
 
       {/* VIEWER CONTENT */}
-      <div 
+      <div
         className={`flex-1 overflow-auto p-4 lg:p-10 bg-zinc-100 transition-all duration-300
           ${editingCandidate && window.innerWidth >= 1024 ? 'border-b border-zinc-300' : ''}
           ${editingCandidate && window.innerWidth < 1024 ? 'pb-[60vh]' : ''} 
@@ -1084,23 +1273,23 @@ const PDFViewer = ({
           {previewUrl ? (
             fileType.includes("pdf") ? (
               <div>
-                <Document 
-                  file={previewUrl} 
+                <Document
+                  file={previewUrl}
                   loading={<div className="p-10 text-xs">Loading PDF...</div>}
                   error={<div className="p-10 text-xs text-red-500">Failed to load PDF</div>}
                 >
-                  <Page 
-                    pageNumber={1} 
-                    width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom} 
-                    renderTextLayer={false} 
-                    renderAnnotationLayer={false} 
+                  <Page
+                    pageNumber={1}
+                    width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
                   />
                 </Document>
               </div>
             ) : (
-              <img 
-                src={previewUrl} 
-                className="shadow-md rounded-lg border border-white object-contain" 
+              <img
+                src={previewUrl}
+                className="shadow-md rounded-lg border border-white object-contain"
                 alt="CV"
                 style={{ width: `${100 * zoom}%`, maxWidth: 'none' }}
               />
@@ -1194,6 +1383,10 @@ const EditForm = ({
           <div>
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">
               Birth Date
+              {/* Add this helper text */}
+              <span className="text-[10px] font-normal text-zinc-400 normal-case ml-2 opacity-75">
+                (MM-DD-YY)
+              </span>
             </label>
             <div className="flex gap-2">
               <input
