@@ -639,7 +639,7 @@ function App() {
                 <FaSpinner className="animate-spin text-lg text-black/50" />
                 <div className="text-center">
                   <p className="text-xs font-bold uppercase tracking-widest text-black">
-                    Loading Database
+                    Loading Data
                   </p>
                   <p className="text-xs mt-1">
                     Please wait...
@@ -776,7 +776,7 @@ function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="h-[50%] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden border-t border-zinc-200 mt-auto"
+              className="h-[60%] bg-white rounded-t-2xl shadow-2xl flex flex-col overflow-hidden border-t border-zinc-200 mt-auto"
             >
               <EditForm
                 editingCandidate={editingCandidate}
@@ -1201,7 +1201,7 @@ const CandidateCard = ({
   )
 }
 
-// PDFViewer Component
+// ==================== PDF VIEWER ====================
 const PDFViewer = ({
   previewUrl, fileType, zoom, setZoom,
   showMobilePreview, setShowMobilePreview, editingCandidate,
@@ -1210,7 +1210,7 @@ const PDFViewer = ({
   return (
     <>
       {/* VIEWER HEADER */}
-      <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10">
+      <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10 select-none">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowMobilePreview(false)}
@@ -1224,7 +1224,7 @@ const PDFViewer = ({
         </div>
 
         {previewUrl && (
-          <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded p-1">
+          <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded p-1 select-none">
             <button
               onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}
               className="p-1 text-zinc-500 hover:text-black"
@@ -1249,7 +1249,6 @@ const PDFViewer = ({
               <FaRedo size={12} />
             </button>
 
-            {/* --- 2. CLOSE BUTTON --- */}
             <div className="hidden md:block w-px h-3 bg-zinc-200 mx-1"></div>
             <button
               onClick={onClear}
@@ -1275,8 +1274,19 @@ const PDFViewer = ({
               <div>
                 <Document
                   file={previewUrl}
-                  loading={<div className="p-10 text-xs">Loading PDF...</div>}
-                  error={<div className="p-10 text-xs text-red-500">Failed to load PDF</div>}
+                  // --- NEW LOADING SPINNER HERE ---
+                  loading={
+                    <div className="flex flex-col items-center justify-center h-96 text-zinc-400">
+                      <FaSpinner className="animate-spin text-2xl mb-2 text-zinc-300" />
+                      <p className="text-xs tracking-wider">Loading Document...</p>
+                    </div>
+                  }
+                  error={
+                    <div className="flex flex-col items-center justify-center h-96 text-red-400">
+                      <FaFilePdf className="text-4xl mb-2 opacity-50" />
+                      <p className="text-xs font-bold uppercase">Failed to load PDF</p>
+                    </div>
+                  }
                 >
                   <Page
                     pageNumber={1}
@@ -1295,7 +1305,7 @@ const PDFViewer = ({
               />
             )
           ) : (
-            <div className="mt-20 flex flex-col items-center text-zinc-300 gap-4">
+            <div className="mt-20 flex flex-col items-center text-zinc-300 gap-4 select-none">
               <FaCopy size={48} className="opacity-20" />
               <p className="text-xs font-bold uppercase tracking-widest">Select a candidate</p>
             </div>
@@ -1430,7 +1440,7 @@ const EditForm = ({
               name="Experience"
               value={editingCandidate.Experience}
               onChange={handleEditChange}
-              rows="3"
+              rows="5"
               className="w-full bg-white border border-zinc-300 p-2 text-sm focus:border-black focus:ring-1 focus:ring-black outline-none transition"
             />
           </div>
