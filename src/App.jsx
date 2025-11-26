@@ -375,7 +375,7 @@ function App() {
       Name: c.Name,
       Gender: c.Gender,
       Phone: c.Tel,
-      Birth: formatDOB(c.Birth),
+      Birth: formatDOB(c.BirthDate),
       Location: c.Location,
       School: c.School,
       Experience: c.Experience
@@ -416,7 +416,7 @@ function App() {
   // --- COPY FUNCTIONS ---
   const formatCandidateText = (candidatesList) => {
     return candidatesList.map(p =>
-      `Name: ${p.Name}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.Birth || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
+      `Name: ${p.Name}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.BirthDate || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
     ).join('\n\n---\n\n')
   }
 
@@ -893,7 +893,7 @@ const CandidateCard = memo(({
       <div className="space-y-1.5">
         <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-zinc-600">
           <span className="flex items-center gap-1.5 truncate"><FaPhoneAlt className="text-zinc-400 shrink-0" size={10} />{person.Tel}</span>
-          <span className="flex items-center gap-1.5 truncate"><FaBirthdayCake className="text-zinc-400 shrink-0" size={10} />{formatDOB(person.Birth)}</span>
+          <span className="flex items-center gap-1.5 truncate"><FaBirthdayCake className="text-zinc-400 shrink-0" size={10} />{formatDOB(person.BirthDate)}</span>
           <span className="flex items-center gap-1.5 truncate"><FaVenusMars className="text-zinc-400 shrink-0" size={10} />{person.Gender || 'N/A'}</span>
         </div>
         <div className="flex items-start gap-1.5 text-xs text-zinc-600">
@@ -1011,7 +1011,7 @@ const EditForm = ({
           <div>
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Birth Date <span className="text-[10px] font-normal text-zinc-400 normal-case ml-2 opacity-75">(MM-DD-YY)</span></label>
             <div className="flex gap-2">
-              <input type="date" name="Birth" value={formatDateForInput(editingCandidate.Birth)} onChange={handleEditChange} className="flex-1 bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition" />
+              <input type="date" name="BirthDate" value={formatDateForInput(editingCandidate.BirthDate)} onChange={handleEditChange} className="flex-1 bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition" />
               <button onClick={() => setEditingCandidate({ ...editingCandidate, Birth: "" })} className="px-3 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded text-xs font-bold text-zinc-600">Clear</button>
             </div>
           </div>
