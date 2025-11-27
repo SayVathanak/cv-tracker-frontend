@@ -129,7 +129,7 @@ function App() {
     setLoading(true)
     try {
       const res = await axios.get(`${API_URL}/candidates`, {
-        params: { page, limit: 20, search }
+        params: { page, limit: 10, search }
       })
       setCandidates(res.data.data)
       setCurrentPage(res.data.page)
