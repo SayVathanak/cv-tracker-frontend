@@ -72,8 +72,7 @@ function App() {
   // PWA State
   const [deferredPrompt, setDeferredPrompt] = useState(null)
 
-  const isLocal = window.location.hostname === "localhost" || window.location.hostname.includes("192.168")
-  const API_URL = isLocal ? 'http://127.0.0.1:8000' : 'https://cv-tracker-api.onrender.com'
+  const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
   useEffect(() => { fetchCandidates(1) }, [])
 
