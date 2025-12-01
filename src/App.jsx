@@ -449,64 +449,63 @@ function App() {
   // --- HELPER: FETCH ALL DATA FOR ACTIONS ---
   const fetchAllForAction = async () => {
     try {
-      // Request page 1 with a very high limit to get everything
-      const res = await axios.get(`${API_URL}/candidates`, {
-        params: { page: 1, limit: 100000, search: searchTerm }
-      })
-      return res.data.data
-    } catch (error) {
-      console.error(error)
-      Toast.fire({ icon: 'error', title: 'Fetch Failed', text: 'Could not retrieve full dataset.' })
-      return []
-    }
-  }
+      console.log("Fetching full dataset...") // Debug log
 
-  // --- HELPER: FETCH EVERYTHING (FOR EXPORT) ---
-  const fetchAllCandidates = async () => {
-    try {
+      // Try a safer limit like 1000 or 5000. 
+      // 100,000 often causes Server Errors (500)
       const res = await axios.get(`${API_URL}/candidates`, {
-        params: { 
-          page: 1, 
-          limit: 10000, // Request a huge number to get ALL pages
-          search: searchTerm 
+        params: {
+          page: 1,
+          limit: 1000,
+          search: searchTerm
         }
       })
-      return res.data.data || []
+
+      console.log("Fetch success:", res.data) // Debug log
+
+      // Ensure we return the array, checking both possible locations
+      return res.data.data || res.data || []
+
     } catch (error) {
-      console.error(error)
+      console.error("Fetch All Error:", error) // <--- CHECK YOUR CONSOLE FOR THIS
+      Toast.fire({
+        icon: 'error',
+        title: 'Fetch Failed',
+        text: 'Server refused the connection. Try a smaller export.'
+      })
       return []
     }
   }
 
   const handleExport = async () => {
-    // 1. Notify user that download is starting (since fetching might take a second)
-    Toast.fire({
-      icon: 'info',
-      title: 'Preparing Download...',
-      text: 'Fetching full dataset from server.'
-    })
+    // 1. Fetch Data
+    Toast.fire({ icon: 'info', title: 'Downloading...', text: 'Please wait.' })
 
-    // 2. Fetch ALL data from the server (Pages 1, 2, 3...)
-    const allData = await fetchAllCandidates()
+    const allData = await fetchAllForAction()
 
+    // 2. Safety Check
     if (!allData || allData.length === 0) {
-      Toast.fire({ icon: 'error', title: 'Export Failed', text: 'No data found.' })
+      // If you see this, check the Browser Console (F12) for the red error details
+      console.log("Export stopped: No data received from API")
       return
     }
 
-    // 3. Determine what to save
-    let finalDataToExport = []
-
+    // 3. Filter (if specific items selected) or Use All
+    let finalData = []
     if (selectedIds.length > 0) {
-      // Filter the FULL list to find only the IDs you selected
-      finalDataToExport = allData.filter(c => selectedIds.includes(c._id))
+      finalData = allData.filter(c => selectedIds.includes(c._id))
     } else {
-      // Export EVERYTHING
-      finalDataToExport = allData
+      finalData = allData
     }
 
-    // 4. Format for Excel
-    const data = finalDataToExport.map(c => ({
+    // 4. Double Check before exporting
+    if (finalData.length === 0) {
+      Toast.fire({ icon: 'warning', title: 'Selection Error', text: 'Selected items not found in full list.' })
+      return
+    }
+
+    // 5. Create Excel
+    const data = finalData.map(c => ({
       Name: c.Name,
       Position: c.Position || "N/A",
       Gender: c.Gender,
@@ -517,13 +516,12 @@ function App() {
       Experience: c.Experience
     }))
 
-    // 5. Generate and Download
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Candidates")
-    XLSX.writeFile(wb, `CV_Export_${new Date().toISOString().slice(0, 10)}.xlsx`)
-    
-    Toast.fire({ icon: 'success', title: 'Download Started', text: `Exported ${finalDataToExport.length} candidates.` })
+    XLSX.writeFile(wb, `CV_Export.xlsx`)
+
+    Toast.fire({ icon: 'success', title: 'Success', text: `Exported ${finalData.length} records.` })
   }
 
   const toggleLock = useCallback(async (person, e) => {
