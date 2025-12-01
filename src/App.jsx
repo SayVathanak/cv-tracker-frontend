@@ -461,21 +461,52 @@ function App() {
     }
   }
 
-  const handleExport = async () => {
-    let toExport = []
+  // --- HELPER: FETCH EVERYTHING (FOR EXPORT) ---
+  const fetchAllCandidates = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/candidates`, {
+        params: { 
+          page: 1, 
+          limit: 10000, // Request a huge number to get ALL pages
+          search: searchTerm 
+        }
+      })
+      return res.data.data || []
+    } catch (error) {
+      console.error(error)
+      return []
+    }
+  }
 
-    if (selectedIds.length > 0) {
-      // Option A: Export only what is selected on the current screen
-      toExport = processedCandidates.filter(c => selectedIds.includes(c._id))
-    } else {
-      // Option B: Nothing selected? Export EVERYTHING from Database
-      Toast.fire({ icon: 'info', title: 'Exporting All...', text: 'Fetching full dataset...' })
-      toExport = await fetchAllForAction()
+  const handleExport = async () => {
+    // 1. Notify user that download is starting (since fetching might take a second)
+    Toast.fire({
+      icon: 'info',
+      title: 'Preparing Download...',
+      text: 'Fetching full dataset from server.'
+    })
+
+    // 2. Fetch ALL data from the server (Pages 1, 2, 3...)
+    const allData = await fetchAllCandidates()
+
+    if (!allData || allData.length === 0) {
+      Toast.fire({ icon: 'error', title: 'Export Failed', text: 'No data found.' })
+      return
     }
 
-    if (!toExport || toExport.length === 0) return
+    // 3. Determine what to save
+    let finalDataToExport = []
 
-    const data = toExport.map(c => ({
+    if (selectedIds.length > 0) {
+      // Filter the FULL list to find only the IDs you selected
+      finalDataToExport = allData.filter(c => selectedIds.includes(c._id))
+    } else {
+      // Export EVERYTHING
+      finalDataToExport = allData
+    }
+
+    // 4. Format for Excel
+    const data = finalDataToExport.map(c => ({
       Name: c.Name,
       Position: c.Position || "N/A",
       Gender: c.Gender,
@@ -486,12 +517,13 @@ function App() {
       Experience: c.Experience
     }))
 
+    // 5. Generate and Download
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Candidates")
-    XLSX.writeFile(wb, `CV_DB_${new Date().toISOString().slice(0, 10)}.xlsx`)
-
-    Toast.fire({ icon: 'success', title: 'Export Complete', text: `${toExport.length} records exported.` })
+    XLSX.writeFile(wb, `CV_Export_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    
+    Toast.fire({ icon: 'success', title: 'Download Started', text: `Exported ${finalDataToExport.length} candidates.` })
   }
 
   const toggleLock = useCallback(async (person, e) => {
