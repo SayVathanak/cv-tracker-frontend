@@ -477,10 +477,10 @@ function App() {
     } catch (error) { alert("Failed to save") }
   }
 
-  // --- COPY FUNCTIONS ---
+// --- COPY FUNCTIONS ---
   const formatCandidateText = (candidatesList) => {
     return candidatesList.map(p =>
-      `Name: ${p.Name}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.BirthDate || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
+      `Name: ${p.Name}\nPosition: ${p.Position || 'N/A'}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.BirthDate || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
     ).join('\n\n---\n\n')
   }
 
