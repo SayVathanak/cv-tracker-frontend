@@ -13,7 +13,7 @@ import {
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
-  FaDownload, FaSpinner
+  FaDownload, FaSpinner, FaSync
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 
@@ -61,7 +61,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOption, setSortOption] = useState("newest")
   const [zoom, setZoom] = useState(1.0)
-  
+
   // GLOBAL DRAG STATE
   const [isDragging, setIsDragging] = useState(false)
 
@@ -94,7 +94,11 @@ function App() {
     e.preventDefault()
     setIsDragging(false)
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileChange({ target: { files: e.dataTransfer.files } })
+      // Pass the dataTransfer object directly so our new logic works
+      handleFileChange({
+        target: { files: null }, // Mock target
+        dataTransfer: e.dataTransfer // Pass drop data here
+      })
     }
   }, [])
 
@@ -204,18 +208,47 @@ function App() {
 
   // --- FILE HANDLERS ---
   const handleFileChange = (e) => {
-    const selectedFiles = e.target.files
-    if (selectedFiles.length > 0) {
-      setFiles(selectedFiles)
-      setFile(selectedFiles[0])
-    }
+    // 1. Get files from either Input change or Drag & Drop
+    const incoming = e.target.files || (e.dataTransfer && e.dataTransfer.files)
+    if (!incoming || incoming.length === 0) return
+
+    const newFilesArray = Array.from(incoming)
+
+    setFiles(prevFiles => {
+      // 2. Get list of existing file names
+      const existingNames = new Set(prevFiles.map(f => f.name))
+
+      // 3. Filter only NEW files (prevent same file name)
+      const uniqueFiles = newFilesArray.filter(f => !existingNames.has(f.name))
+
+      // 4. Show feedback if duplicates were skipped
+      if (uniqueFiles.length < newFilesArray.length) {
+        const skippedCount = newFilesArray.length - uniqueFiles.length
+        Toast.fire({
+          icon: 'warning',
+          title: 'Duplicates Skipped',
+          text: `${skippedCount} file(s) are already in the list.`
+        })
+      }
+
+      // 5. Append new files to the existing list
+      const updatedList = [...prevFiles, ...uniqueFiles]
+
+      // Update single file reference (optional, keeps logic consistent)
+      if (updatedList.length > 0) setFile(updatedList[0])
+
+      return updatedList
+    })
+
+    // 6. Reset input value so you can select the same file again if you delete it from list
+    if (e.target && e.target.value) e.target.value = ""
   }
 
   const handleClearFiles = () => {
     setFiles([])
     setFile(null)
     const input = document.getElementById('fileInput')
-    if(input) input.value = ""
+    if (input) input.value = ""
   }
 
   const handleUpload = async () => {
@@ -278,6 +311,37 @@ function App() {
     setPreviewUrl(fileUrl)
     setZoom(1.0)
   }
+
+  // --- RETRY HANDLER ---
+  const handleRetry = useCallback(async (person, e) => {
+    e.stopPropagation()
+
+    // UI Feedback
+    Toast.fire({
+      icon: 'info',
+      title: 'Re-analyzing CV...',
+      text: 'Attempting to extract more details.'
+    })
+
+    try {
+      const res = await axios.post(`${API_URL}/candidates/${person._id}/retry`)
+
+      if (res.data.status === "success") {
+        Toast.fire({ icon: 'success', title: 'Updated!', text: 'Data refreshed.' })
+        fetchCandidates() // Refresh the list to show new data
+
+        // If this person is currently selected/previewed, update the edit view if open
+        if (editingCandidate && editingCandidate._id === person._id) {
+          setEditingCandidate(prev => ({ ...prev, ...res.data.data }))
+        }
+      } else {
+        Toast.fire({ icon: 'error', title: 'Failed', text: res.data.message })
+      }
+    } catch (error) {
+      console.error(error)
+      Toast.fire({ icon: 'error', title: 'Server Error' })
+    }
+  }, [editingCandidate]) // Add dependencies if needed
 
   const handleDelete = useCallback(async (id, name, e) => {
     e.stopPropagation()
@@ -355,7 +419,7 @@ function App() {
   const handleClearAll = async () => {
     // ... (Keep existing implementation logic if needed, omitted for brevity as bulk delete covers most)
     // Kept simplified for this update to focus on UI
-    handleBulkDelete() 
+    handleBulkDelete()
   }
 
   const handleClearPreview = useCallback(() => {
@@ -372,6 +436,7 @@ function App() {
       : processedCandidates
     const data = toExport.map(c => ({
       Name: c.Name,
+      Position: c.Position || "N/A",
       Gender: c.Gender,
       Phone: c.Tel,
       Birth: formatDOB(c.BirthDate),
@@ -455,25 +520,25 @@ function App() {
 
   // --- RENDER ---
   return (
-    <div 
+    <div
       // GLOBAL DRAG HANDLERS AT ROOT
       onDragOver={handleGlobalDragOver}
       onDragLeave={handleGlobalDragLeave}
       onDrop={handleGlobalDrop}
       className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden select-none relative"
     >
-      
+
       {/* GLOBAL DRAG OVERLAY */}
       <AnimatePresence>
         {isDragging && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 z-100 backdrop-blur-xs flex flex-col items-center justify-center pointer-events-none"
           >
-             <FaCloudUploadAlt className="text-6xl text-blue-500 mb-4 animate-bounce" />
-             <p className="text-2xl font-bold text-blue-600 uppercase tracking-widest">Drop Files Here</p>
+            <FaCloudUploadAlt className="text-6xl text-blue-500 mb-4 animate-bounce" />
+            <p className="text-2xl font-bold text-blue-600 uppercase tracking-widest">Drop Files Here</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -491,7 +556,7 @@ function App() {
         <div className={`flex flex-col w-full lg:w-[500px] xl:w-[550px] border-r border-zinc-200 h-full transition-all duration-300 z-10 bg-white
           ${showMobilePreview ? 'hidden lg:flex' : 'flex'}
         `}>
-          <StatsPanel stats={stats} loading={loading}/>
+          <StatsPanel stats={stats} loading={loading} />
           <ControlPanel
             files={files}
             loading={loading}
@@ -520,9 +585,9 @@ function App() {
             {loading ? (
               // --- SKELETON LOADING STATE ---
               <div className="space-y-3">
-                 {[...Array(6)].map((_, i) => (
-                   <SkeletonLoader key={i} />
-                 ))}
+                {[...Array(6)].map((_, i) => (
+                  <SkeletonLoader key={i} />
+                ))}
               </div>
             ) : (
               // --- FRAMER MOTION LIST ---
@@ -550,11 +615,12 @@ function App() {
                         handleDelete={handleDelete}
                         handleCopy={handleCopy}
                         handleOpenPdfMobile={handleOpenPdfMobile}
+                        handleRetry={handleRetry}
                       />
                     </motion.div>
                   ))
                 ) : (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     className="text-center py-10 text-zinc-400 text-xs"
                   >
@@ -680,11 +746,11 @@ const SkeletonLoader = () => {
     <div className="p-3 rounded border border-zinc-100 bg-white">
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center gap-2.5 w-full">
-           <div className="w-8 h-8 rounded bg-zinc-200 animate-pulse flex-none"></div>
-           <div className="flex-1 space-y-1.5 overflow-hidden">
-             <div className="h-3 bg-zinc-200 rounded w-1/3 animate-pulse"></div>
-             <div className="h-2 bg-zinc-100 rounded w-1/2 animate-pulse"></div>
-           </div>
+          <div className="w-8 h-8 rounded bg-zinc-200 animate-pulse flex-none"></div>
+          <div className="flex-1 space-y-1.5 overflow-hidden">
+            <div className="h-3 bg-zinc-200 rounded w-1/3 animate-pulse"></div>
+            <div className="h-2 bg-zinc-100 rounded w-1/2 animate-pulse"></div>
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2 mt-2">
@@ -753,7 +819,7 @@ const ControlPanel = ({
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
   toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy
 }) => {
-  
+
   // NOTE: Drag events removed from here as they are now global in App component
 
   return (
@@ -833,7 +899,7 @@ const ControlPanel = ({
 const CandidateCard = memo(({
   person, expandedId, selectedIds, selectMode, copiedId,
   handleCardClick, toggleSelection, toggleLock, startEditing,
-  handleDelete, handleCopy, handleOpenPdfMobile
+  handleDelete, handleCopy, handleOpenPdfMobile, handleRetry
 }) => {
   const isExpanded = expandedId === person._id;
   const isSelected = selectedIds.includes(person._id);
@@ -844,8 +910,8 @@ const CandidateCard = memo(({
       className={`
         group relative p-3 rounded border cursor-pointer overflow-hidden transform-gpu
         transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1.0)]
-        ${isExpanded 
-          ? 'bg-zinc-50 border-black ring-1 ring-black shadow-md z-10' 
+        ${isExpanded
+          ? 'bg-zinc-50 border-black ring-1 ring-black shadow-md z-10'
           : 'bg-white border-zinc-200 hover:border-zinc-400 hover:shadow-sm'
         }
         ${isSelected && selectMode ? 'ring-1 ring-blue-500 border-blue-500 bg-blue-50/10' : ''}
@@ -875,6 +941,11 @@ const CandidateCard = memo(({
               <h3 className="text-xs font-semibold text-black uppercase truncate leading-none transition-colors">{person.Name}</h3>
               {person.locked && <FaLock className="text-amber-500 shrink-0 animate-pulse" size={8} />}
             </div>
+            {person.Position && person.Position !== "N/A" && (
+              <p className="text-[10px] font-bold text-blue-600 truncate mt-0.5 uppercase">
+                {person.Position}
+              </p>
+            )}
             <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">{person.School || "N/A"}</p>
           </div>
         </div>
@@ -885,6 +956,13 @@ const CandidateCard = memo(({
             </button>
             <button onClick={(e) => startEditing(person, e)} className="p-2 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition-colors duration-200"><FaEdit size={10} /></button>
             <button onClick={(e) => handleDelete(person._id, person.Name, e)} className="p-2 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition-colors duration-200" disabled={person.locked}><FaTrash size={10} /></button>
+            <button
+              onClick={(e) => handleRetry(person, e)}
+              title="Retry AI Parsing"
+              className="hidden sm:block p-2 text-blue-400 hover:text-blue-600 bg-white border border-zinc-100 hover:border-blue-500 rounded transition-colors duration-200"
+            >
+              <FaSync size={10} />
+            </button>
           </div>
         )}
       </div>
@@ -998,6 +1076,7 @@ const EditForm = ({
       <div className="flex-1 overflow-y-auto p-6 bg-white">
         <div className="grid grid-cols-2 gap-4 max-w-4xl mx-auto">
           <SolidInput label="Full Name" name="Name" val={editingCandidate.Name} onChange={handleEditChange} />
+          <SolidInput label="Applying For" name="Position" val={editingCandidate.Position} onChange={handleEditChange} />
           <SolidInput label="Phone" name="Tel" val={editingCandidate.Tel} onChange={handleEditChange} />
           <div className="col-span-1">
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Gender</label>
