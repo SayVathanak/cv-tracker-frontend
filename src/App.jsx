@@ -198,10 +198,26 @@ function App() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
   }, [])
 
-  const toggleSelectAll = () => {
-    if (selectedIds.length > 0) setSelectedIds([])
-    else setSelectedIds(processedCandidates.filter(c => !c.locked).map(c => c._id))
-  }
+  // --- UPDATED SELECTION FUNCTION ---
+  const toggleSelectAll = useCallback(() => {
+    // 1. Get all unlocked IDs on the CURRENT page
+    const currentPageIds = processedCandidates
+      .filter(c => !c.locked)
+      .map(c => c._id)
+
+    if (currentPageIds.length === 0) return
+
+    // 2. Check if all items on this page are ALREADY selected
+    const isPageSelected = currentPageIds.every(id => selectedIds.includes(id))
+
+    if (isPageSelected) {
+      // DESELECT: Remove current page IDs, keep others
+      setSelectedIds(prev => prev.filter(id => !currentPageIds.includes(id)))
+    } else {
+      // SELECT: Add current page IDs to existing selection (using Set to prevent duplicates)
+      setSelectedIds(prev => [...new Set([...prev, ...currentPageIds])])
+    }
+  }, [processedCandidates, selectedIds])
 
   const handleExitMode = () => { setSelectedIds([]); setSelectMode(false) }
   const clearSelection = () => { setSelectedIds([]); setSelectMode(false) }
@@ -501,10 +517,10 @@ function App() {
     try {
       await axios.put(`${API_URL}/candidates/${editingCandidate._id}`, editingCandidate)
       setEditingCandidate(null)
-      
+
       // CHANGE THIS LINE: Pass 'currentPage' to stay on the same page
-      fetchCandidates(currentPage) 
-      
+      fetchCandidates(currentPage)
+
     } catch (error) { alert("Failed to save") }
   }
 
@@ -863,6 +879,9 @@ const ControlPanel = ({
 
   // NOTE: Drag events removed from here as they are now global in App component
 
+  const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
+  const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+
   return (
     <div className="relative flex-none p-3 space-y-2 border-b border-zinc-100 bg-white">
       <div className="flex gap-2">
@@ -922,7 +941,7 @@ const ControlPanel = ({
           {selectMode && (
             <>
               <button onClick={toggleSelectAll} className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white">
-                {selectedIds.length > 0 ? 'None' : 'All'}
+                {isPageFullySelected ? 'None' : 'All'}
               </button>
               <button onClick={handleBulkDelete} disabled={selectedIds.length === 0} className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition ${selectedIds.length > 0 ? 'bg-red-500 hover:bg-red-600' : 'bg-zinc-200 cursor-not-allowed'}`}>
                 <FaTrash size={10} />
