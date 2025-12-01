@@ -328,7 +328,7 @@ function App() {
 
       if (res.data.status === "success") {
         Toast.fire({ icon: 'success', title: 'Updated!', text: 'Data refreshed.' })
-        fetchCandidates() // Refresh the list to show new data
+        fetchCandidates(currentPage) // Refresh the list to show new data
 
         // If this person is currently selected/previewed, update the edit view if open
         if (editingCandidate && editingCandidate._id === person._id) {
@@ -430,10 +430,35 @@ function App() {
     if (editingCandidate) setEditingCandidate(null)
   }, [editingCandidate])
 
-  const handleExport = () => {
-    const toExport = selectedIds.length > 0
-      ? processedCandidates.filter(c => selectedIds.includes(c._id))
-      : processedCandidates
+  // --- HELPER: FETCH ALL DATA FOR ACTIONS ---
+  const fetchAllForAction = async () => {
+    try {
+      // Request page 1 with a very high limit to get everything
+      const res = await axios.get(`${API_URL}/candidates`, {
+        params: { page: 1, limit: 100000, search: searchTerm }
+      })
+      return res.data.data
+    } catch (error) {
+      console.error(error)
+      Toast.fire({ icon: 'error', title: 'Fetch Failed', text: 'Could not retrieve full dataset.' })
+      return []
+    }
+  }
+
+  const handleExport = async () => {
+    let toExport = []
+
+    if (selectedIds.length > 0) {
+      // Option A: Export only what is selected on the current screen
+      toExport = processedCandidates.filter(c => selectedIds.includes(c._id))
+    } else {
+      // Option B: Nothing selected? Export EVERYTHING from Database
+      Toast.fire({ icon: 'info', title: 'Exporting All...', text: 'Fetching full dataset...' })
+      toExport = await fetchAllForAction()
+    }
+
+    if (!toExport || toExport.length === 0) return
+
     const data = toExport.map(c => ({
       Name: c.Name,
       Position: c.Position || "N/A",
@@ -444,19 +469,22 @@ function App() {
       School: c.School,
       Experience: c.Experience
     }))
+
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Candidates")
-    XLSX.writeFile(wb, `CV_DB.xlsx`)
+    XLSX.writeFile(wb, `CV_DB_${new Date().toISOString().slice(0, 10)}.xlsx`)
+
+    Toast.fire({ icon: 'success', title: 'Export Complete', text: `${toExport.length} records exported.` })
   }
 
   const toggleLock = useCallback(async (person, e) => {
     e.stopPropagation()
     try {
       await axios.put(`${API_URL}/candidates/${person._id}/lock`, { locked: !person.locked })
-      fetchCandidates()
+      fetchCandidates(currentPage) // <--- Pass currentPage here
     } catch (error) { alert("Failed") }
-  }, [])
+  }, [currentPage]) // Add currentPage to dependency array
 
   const startEditing = useCallback((person, e) => {
     e.stopPropagation()
@@ -473,11 +501,14 @@ function App() {
     try {
       await axios.put(`${API_URL}/candidates/${editingCandidate._id}`, editingCandidate)
       setEditingCandidate(null)
-      fetchCandidates()
+      
+      // CHANGE THIS LINE: Pass 'currentPage' to stay on the same page
+      fetchCandidates(currentPage) 
+      
     } catch (error) { alert("Failed to save") }
   }
 
-// --- COPY FUNCTIONS ---
+  // --- COPY FUNCTIONS ---
   const formatCandidateText = (candidatesList) => {
     return candidatesList.map(p =>
       `Name: ${p.Name}\nPosition: ${p.Position || 'N/A'}\nGender: ${p.Gender || 'N/A'}\nDOB: ${p.BirthDate || 'N/A'}\nPhone: ${p.Tel}\nAddress: ${p.Location}\nEducation: ${p.School}\nExperience: ${p.Experience}`
@@ -494,16 +525,26 @@ function App() {
     Toast.fire({ icon: 'success', title: 'Copied' })
   }, [])
 
-  const handleBulkCopy = (mode) => {
+  const handleBulkCopy = async (mode) => {
     let candidatesToCopy = []
-    if (mode === 'selected') candidatesToCopy = processedCandidates.filter(c => selectedIds.includes(c._id))
-    else candidatesToCopy = processedCandidates
-    if (candidatesToCopy.length === 0) {
+
+    if (mode === 'selected') {
+      // Copy only selected items
+      candidatesToCopy = processedCandidates.filter(c => selectedIds.includes(c._id))
+    } else {
+      // Copy ALL items from Database
+      Toast.fire({ icon: 'info', title: 'Copying All...', text: 'Fetching full dataset...' })
+      candidatesToCopy = await fetchAllForAction()
+    }
+
+    if (!candidatesToCopy || candidatesToCopy.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Nothing to copy' })
       return
     }
+
     navigator.clipboard.writeText(formatCandidateText(candidatesToCopy))
-    Toast.fire({ icon: 'success', title: `Copied ${candidatesToCopy.length} items` })
+    Toast.fire({ icon: 'success', title: `Copied ${candidatesToCopy.length} items to clipboard` })
+
     if (mode === 'selected') clearSelection()
   }
 
