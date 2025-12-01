@@ -446,34 +446,52 @@ function App() {
     if (editingCandidate) setEditingCandidate(null)
   }, [editingCandidate])
 
-  // --- HELPER: FETCH ALL DATA FOR ACTIONS ---
+  // --- HELPER: SMART FETCH (Batches of 50) ---
   const fetchAllForAction = async () => {
     try {
-      console.log("Fetching full dataset...") // Debug log
-
-      // Try a safer limit like 1000 or 5000. 
-      // 100,000 often causes Server Errors (500)
-      const res = await axios.get(`${API_URL}/candidates`, {
-        params: {
-          page: 1,
-          limit: 1000,
-          search: searchTerm
-        }
+      const BATCH_SIZE = 50; // Safe size that won't crash the server
+      
+      // 1. Get the first page to see how many items exist total
+      const firstRes = await axios.get(`${API_URL}/candidates`, {
+        params: { page: 1, limit: BATCH_SIZE, search: searchTerm }
       })
 
-      console.log("Fetch success:", res.data) // Debug log
+      let allData = firstRes.data.data || [];
+      const totalItems = firstRes.data.total;
+      const totalPages = Math.ceil(totalItems / BATCH_SIZE);
 
-      // Ensure we return the array, checking both possible locations
-      return res.data.data || res.data || []
+      // 2. If there are more pages, fetch them all in parallel
+      if (totalPages > 1) {
+        Toast.fire({ 
+          icon: 'info', 
+          title: 'Downloading...', 
+          text: `Fetching ${totalItems} items in batches...` 
+        });
+
+        const promises = [];
+        for (let p = 2; p <= totalPages; p++) {
+          promises.push(
+            axios.get(`${API_URL}/candidates`, {
+              params: { page: p, limit: BATCH_SIZE, search: searchTerm }
+            })
+          );
+        }
+
+        const responses = await Promise.all(promises);
+        responses.forEach(res => {
+          if (res.data.data) {
+            allData = [...allData, ...res.data.data];
+          }
+        });
+      }
+
+      console.log(`Successfully fetched ${allData.length} items`);
+      return allData;
 
     } catch (error) {
-      console.error("Fetch All Error:", error) // <--- CHECK YOUR CONSOLE FOR THIS
-      Toast.fire({
-        icon: 'error',
-        title: 'Fetch Failed',
-        text: 'Server refused the connection. Try a smaller export.'
-      })
-      return []
+      console.error("Smart Fetch Error:", error);
+      Toast.fire({ icon: 'error', title: 'Export Failed', text: 'Server rejected the request.' });
+      return [];
     }
   }
 
