@@ -7,6 +7,8 @@ import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import Swal from 'sweetalert2'
 import withReactContent from 'sweetalert2-react-content'
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 
 import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel,
@@ -17,7 +19,16 @@ import {
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+// pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 // --- HELPER: DATE FORMATTER ---
 const formatDOB = (dateString) => {
@@ -61,6 +72,8 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortOption, setSortOption] = useState("newest")
   const [zoom, setZoom] = useState(1.0)
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // GLOBAL DRAG STATE
   const [isDragging, setIsDragging] = useState(false)
@@ -119,6 +132,25 @@ function App() {
     }, 500)
     return () => clearTimeout(delayDebounceFn)
   }, [searchTerm])
+
+  // --- AUTO-REFRESH LOGIC ---
+  useEffect(() => {
+    // Check if any visible candidate is currently processing
+    const hasProcessing = candidates.some(c => c.status === "Processing");
+
+    if (hasProcessing) {
+      console.log("Files are processing... polling for updates.");
+
+      // Set up a timer to fetch data every 3 seconds
+      const interval = setInterval(() => {
+        // Use 'true' as a second arg to indicate this is a background refresh (optional)
+        fetchCandidates(currentPage, searchTerm);
+      }, 3000);
+
+      // Cleanup the timer when component unmounts or processing finishes
+      return () => clearInterval(interval);
+    }
+  }, [candidates, currentPage, searchTerm]); // Re-run whenever candidates list changes
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return
@@ -267,36 +299,57 @@ function App() {
     if (input) input.value = ""
   }
 
+  // Inside App function
   const handleUpload = async () => {
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' })
       return
     }
-    setLoading(true)
-    setStatus(`Processing...`)
+    
+    // 1. Start Inline Progress
+    setIsUploading(true)
+    setUploadProgress(0)
+    setStatus("Uploading...")
+
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) formData.append('files', files[i])
 
     try {
+      // 2. Send Request
       const res = await axios.post(`${API_URL}/upload-cv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const rawPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          // Cap at 90% for upload phase (rest is server processing)
+          setUploadProgress(Math.min(rawPercent, 90))
+        }
       })
-      setStatus(`Done. ${res.data.details.length} scanned.`)
-      MySwal.fire({
-        icon: 'success',
-        title: 'Upload Complete',
-        text: `Processed ${res.data.details.length} files.`,
-        timer: 2000,
-        showConfirmButton: false
-      })
-      fetchCandidates()
-      handleClearFiles()
+
+      // 3. Server Responded (Hit 100%)
+      setUploadProgress(100)
+      setStatus("Finalizing...")
+
+      // Short delay to show the full green bar before resetting
+      setTimeout(() => {
+        setIsUploading(false)
+        setStatus(`Done. ${res.data.details.length} uploaded.`)
+        
+        // Show a small toast instead of a big popup
+        Toast.fire({
+          icon: 'success',
+          title: 'Upload Complete',
+          text: `${res.data.details.length} files processing.`
+        })
+        
+        fetchCandidates()
+        handleClearFiles()
+      }, 1000)
+      
     } catch (error) {
+      console.error(error)
+      setIsUploading(false)
       setStatus("Upload failed.")
-      MySwal.fire({ icon: 'error', title: 'Upload Failed', text: 'Server error.' })
-    } finally {
-      setLoading(false)
-      setTimeout(() => setStatus(""), 3000)
+      Toast.fire({ icon: 'error', title: 'Upload Failed' })
     }
   }
 
@@ -450,7 +503,7 @@ function App() {
   const fetchAllForAction = async () => {
     try {
       const BATCH_SIZE = 50; // Safe size that won't crash the server
-      
+
       // 1. Get the first page to see how many items exist total
       const firstRes = await axios.get(`${API_URL}/candidates`, {
         params: { page: 1, limit: BATCH_SIZE, search: searchTerm }
@@ -462,10 +515,10 @@ function App() {
 
       // 2. If there are more pages, fetch them all in parallel
       if (totalPages > 1) {
-        Toast.fire({ 
-          icon: 'info', 
-          title: 'Downloading...', 
-          text: `Fetching ${totalItems} items in batches...` 
+        Toast.fire({
+          icon: 'info',
+          title: 'Downloading...',
+          text: `Fetching ${totalItems} items in batches...`
         });
 
         const promises = [];
@@ -683,6 +736,8 @@ function App() {
             handleBulkDelete={handleBulkDelete}
             handleClearAll={handleClearAll}
             handleBulkCopy={handleBulkCopy}
+            isUploading={isUploading}
+            uploadProgress={uploadProgress}
           />
 
           {/* CANDIDATE LIST */}
@@ -922,27 +977,41 @@ const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy
+  toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy,
+  isUploading, uploadProgress 
 }) => {
-
-  // NOTE: Drag events removed from here as they are now global in App component
 
   const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
   const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
 
   return (
-    <div className="relative flex-none p-3 space-y-2 border-b border-zinc-100 bg-white">
+    <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
+      
+      {/* 1. UPLOAD SECTION */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <input id="fileInput" type="file" multiple onChange={handleFileChange} className="hidden" />
-          <label htmlFor="fileInput" className="w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent hover:border-black rounded text-xs font-bold uppercase cursor-pointer transition text-zinc-600 hover:text-black select-none">
+          <input 
+             id="fileInput" 
+             type="file" 
+             multiple 
+             onChange={handleFileChange} 
+             className="hidden" 
+             disabled={isUploading} // Lock input during upload
+          />
+          <label 
+            htmlFor="fileInput" 
+            className={`w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent rounded text-xs font-bold uppercase transition text-zinc-600 select-none
+            ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-black hover:text-black cursor-pointer'}`}
+          >
             {files.length > 0 ? <><FaCheck /> {files.length} Files Ready</> : <><FaCloudUploadAlt /> Upload PDFs</>}
           </label>
         </div>
-        {files.length > 0 && (
+        
+        {/* Upload Action Buttons */}
+        {files.length > 0 && !isUploading && (
           <div className="flex gap-1">
-            <button onClick={handleUpload} disabled={loading} className="px-4 h-8 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50">
-              {loading ? "..." : "Upload"}
+            <button onClick={handleUpload} className="px-4 h-8 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition">
+              Upload
             </button>
             <button onClick={handleClearFiles} className="px-2 h-8 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition">
               <FaTrash size={12} />
@@ -951,8 +1020,43 @@ const ControlPanel = ({
         )}
       </div>
 
-      {status && <div className="text-xs text-center py-1 bg-zinc-50 rounded border border-zinc-200 text-zinc-500">{status}</div>}
+      {/* 2. INLINE PROGRESS BAR (The "Installation" Look) */}
+      <AnimatePresence>
+        {isUploading && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">
+                  {uploadProgress < 90 ? 'Uploading...' : 'Finalizing...'}
+                </span>
+                <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress}%` }}
+                  transition={{ ease: "easeOut", duration: 0.3 }}
+                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* 3. STATUS MESSAGE (If exists and NOT uploading) */}
+      {status && !isUploading && (
+        <div className="text-xs text-center py-1 bg-zinc-50 rounded border border-zinc-200 text-zinc-500 truncate">
+          {status}
+        </div>
+      )}
+
+      {/* 4. SEARCH & SORT (Unchanged) */}
       <div className="relative">
         <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
         <input
@@ -971,8 +1075,10 @@ const ControlPanel = ({
         </select>
       </div>
 
+      {/* 5. SELECTION TOOLS (Unchanged) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
-        {selectMode ? (
+        {/* ... (Keep your existing Copy/Select buttons code here) ... */}
+         {selectMode ? (
           <button onClick={() => handleBulkCopy('selected')} disabled={selectedIds.length === 0} className="w-full h-8 bg-black text-white border border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-1.5">
             <FaCopy size={10} /> Copy ({selectedIds.length})
           </button>
@@ -1003,7 +1109,6 @@ const ControlPanel = ({
 }
 
 // ==================== CANDIDATE CARD (MEMOIZED) ====================
-// Wrapped in React.memo to prevent re-renders when other candidates change
 const CandidateCard = memo(({
   person, expandedId, selectedIds, selectMode, copiedId,
   handleCardClick, toggleSelection, toggleLock, startEditing,
@@ -1012,64 +1117,112 @@ const CandidateCard = memo(({
   const isExpanded = expandedId === person._id;
   const isSelected = selectedIds.includes(person._id);
 
+  // CHECK PROCESSING STATUS
+  const isProcessing = person.status === "Processing";
+
   return (
     <div
-      onClick={() => handleCardClick(person)}
+      onClick={() => !isProcessing && handleCardClick(person)} // Disable expand if processing
       className={`
         group relative p-3 rounded border cursor-pointer overflow-hidden transform-gpu
         transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1.0)]
-        ${isExpanded
-          ? 'bg-zinc-50 border-black ring-1 ring-black shadow-md z-10'
-          : 'bg-white border-zinc-200 hover:border-zinc-400 hover:shadow-sm'
+        ${isProcessing ? 'bg-zinc-50 opacity-90 border-zinc-100 cursor-wait' :
+          isExpanded
+            ? 'bg-zinc-50 border-black ring-1 ring-black shadow-md z-10'
+            : 'bg-white border-zinc-200 hover:border-zinc-400 hover:shadow-sm'
         }
         ${isSelected && selectMode ? 'ring-1 ring-blue-500 border-blue-500 bg-blue-50/10' : ''}
       `}
     >
       <div className="flex justify-between items-start mb-2">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-8 h-8">
+        <div className="flex items-center gap-2.5 w-full">
+          {/* AVATAR / SPINNER BOX */}
+          <div className="relative w-8 h-8 flex-none">
             <button
               onClick={(e) => { e.stopPropagation(); toggleSelection(person._id); }}
+              disabled={isProcessing}
               className={`absolute inset-0 w-full h-full flex items-center justify-center border rounded transition-all duration-300 transform
                 ${selectMode ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-50 pointer-events-none'}
                 ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-zinc-300'}
+                ${isProcessing ? 'cursor-not-allowed opacity-50' : ''}
               `}
             >
               <FaCheck size={12} className={`transition-transform duration-200 ${isSelected ? 'scale-100' : 'scale-0'}`} />
             </button>
+
+            {/* The Initial or Spinner */}
             <div className={`absolute inset-0 w-full h-full flex items-center justify-center text-xs font-bold border rounded transition-all duration-300 transform
               ${!selectMode ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 rotate-90 scale-50'}
               ${isExpanded ? 'bg-black text-white border-black' : 'bg-white text-black border-zinc-200'}
+              ${isProcessing ? 'border-green-200 bg-green-50 text-green-600' : ''}
             `}>
-              {person.Name.charAt(0).toUpperCase()}
+              {isProcessing ? <FaSpinner className="animate-spin" size={12} /> : person.Name.charAt(0).toUpperCase()}
             </div>
           </div>
-          <div className="overflow-hidden">
+
+          {/* MAIN CONTENT AREA */}
+          <div className="overflow-hidden flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-xs font-semibold text-black uppercase truncate leading-none transition-colors">{person.Name}</h3>
-              {person.locked && <FaLock className="text-amber-500 shrink-0 animate-pulse" size={8} />}
+              {isProcessing ? (
+                // --- GREEN INSTALLATION DESIGN ---
+                <div className="w-full pr-2">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">Installing Data...</span>
+                    <span className="text-[10px] font-bold text-green-600 animate-pulse">Wait</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-green-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full animate-pulse w-full origin-left"></div>
+                  </div>
+                </div>
+              ) : (
+                // --- NORMAL NAME DISPLAY ---
+                <>
+                  <h3 className="text-xs font-semibold text-black uppercase truncate leading-none transition-colors">{person.Name}</h3>
+                  {person.locked && <FaLock className="text-amber-500 shrink-0 animate-pulse" size={8} />}
+                </>
+              )}
             </div>
-            {person.Position && person.Position !== "N/A" && (
+
+            {/* HIDE POSITION IF PROCESSING */}
+            {!isProcessing && person.Position && person.Position !== "N/A" && (
               <p className="text-[10px] font-bold text-blue-600 truncate mt-0.5 uppercase">
                 {person.Position}
               </p>
             )}
-            <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">{person.School || "N/A"}</p>
+
+            {/* SUBTITLE */}
+            <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">
+              {isProcessing ? "AI is reading document..." : (person.School || "N/A")}
+            </p>
           </div>
         </div>
+
+        {/* ACTION BUTTONS */}
         {!selectMode && (
-          <div className={`flex gap-1 z-20 transition-all duration-300 ease-out ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none lg:pointer-events-auto lg:group-hover:opacity-100 lg:group-hover:translate-y-0'}`}>
-            <button onClick={(e) => toggleLock(person, e)} className={`p-2 rounded transition-colors duration-200 border ${person.locked ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-zinc-400 hover:text-black bg-white border-zinc-100 hover:border-black'}`}>
+          <div className={`flex gap-1 z-20 transition-all duration-300 ease-out pl-2 ${isExpanded || isProcessing ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none lg:pointer-events-auto lg:group-hover:opacity-100 lg:group-hover:translate-y-0'}`}>
+
+            {/* Disable Lock/Edit if processing */}
+            <button disabled={isProcessing} onClick={(e) => toggleLock(person, e)} className={`p-2 rounded transition-colors duration-200 border ${person.locked ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-zinc-400 hover:text-black bg-white border-zinc-100 hover:border-black'} ${isProcessing ? 'opacity-30 cursor-not-allowed' : ''}`}>
               {person.locked ? <FaLock size={10} /> : <FaUnlock size={10} />}
             </button>
-            <button onClick={(e) => startEditing(person, e)} className="p-2 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition-colors duration-200"><FaEdit size={10} /></button>
-            <button onClick={(e) => handleDelete(person._id, person.Name, e)} className="p-2 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition-colors duration-200" disabled={person.locked}><FaTrash size={10} /></button>
+
+            <button disabled={isProcessing} onClick={(e) => startEditing(person, e)} className={`p-2 text-zinc-400 hover:text-black bg-white border border-zinc-100 hover:border-black rounded transition-colors duration-200 ${isProcessing ? 'opacity-30 cursor-not-allowed' : ''}`}>
+              <FaEdit size={10} />
+            </button>
+
+            {/* Allow Deleting "Processing" items in case they get stuck */}
+            <button onClick={(e) => handleDelete(person._id, person.Name, e)} className="p-2 text-zinc-400 hover:text-red-600 bg-white border border-zinc-100 hover:border-red-500 rounded transition-colors duration-200" disabled={person.locked}>
+              <FaTrash size={10} />
+            </button>
+
+            {/* Retry Button - Useful if it gets stuck on processing */}
             <button
               onClick={(e) => handleRetry(person, e)}
               title="Retry AI Parsing"
-              className="hidden sm:block p-2 text-blue-400 hover:text-blue-600 bg-white border border-zinc-100 hover:border-blue-500 rounded transition-colors duration-200"
+              disabled={isProcessing}
+              className={`hidden sm:block p-2 text-blue-400 hover:text-blue-600 bg-white border border-zinc-100 hover:border-blue-500 rounded transition-colors duration-200 ${isProcessing ? 'animate-pulse opacity-50 cursor-wait' : ''}`}
             >
-              <FaSync size={10} />
+              <FaSync size={10} className={isProcessing ? "animate-spin" : ""} />
             </button>
           </div>
         )}
@@ -1077,15 +1230,17 @@ const CandidateCard = memo(({
 
       <div className="space-y-1.5">
         <div className="grid grid-cols-3 gap-x-2 gap-y-1 text-xs text-zinc-600">
-          <span className="flex items-center gap-1.5 truncate"><FaPhoneAlt className="text-zinc-400 shrink-0" size={10} />{person.Tel}</span>
-          <span className="flex items-center gap-1.5 truncate"><FaBirthdayCake className="text-zinc-400 shrink-0" size={10} />{formatDOB(person.BirthDate)}</span>
-          <span className="flex items-center gap-1.5 truncate"><FaVenusMars className="text-zinc-400 shrink-0" size={10} />{person.Gender || 'N/A'}</span>
+          <span className="flex items-center gap-1.5 truncate"><FaPhoneAlt className="text-zinc-400 shrink-0" size={10} />{isProcessing ? "..." : person.Tel}</span>
+          <span className="flex items-center gap-1.5 truncate"><FaBirthdayCake className="text-zinc-400 shrink-0" size={10} />{isProcessing ? "..." : formatDOB(person.BirthDate)}</span>
+          <span className="flex items-center gap-1.5 truncate"><FaVenusMars className="text-zinc-400 shrink-0" size={10} />{isProcessing ? "..." : (person.Gender || 'N/A')}</span>
         </div>
         <div className="flex items-start gap-1.5 text-xs text-zinc-600">
           <FaMapMarkerAlt className="text-zinc-400 mt-0.5 shrink-0" size={10} />
-          <span className="leading-tight line-clamp-1">{person.Location}</span>
+          <span className="leading-tight line-clamp-1">{isProcessing ? "Analyzing location..." : person.Location}</span>
         </div>
-        <div className={`grid transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1.0)] ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-2 border-t border-zinc-200 pt-2' : 'grid-rows-[0fr] opacity-0 mt-0 border-t-0 pt-0'}`}>
+
+        {/* EXPANDED CONTENT - Only show if NOT processing */}
+        <div className={`grid transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1.0)] ${(isExpanded && !isProcessing) ? 'grid-rows-[1fr] opacity-100 mt-2 border-t border-zinc-200 pt-2' : 'grid-rows-[0fr] opacity-0 mt-0 border-t-0 pt-0'}`}>
           <div className="overflow-hidden min-h-0">
             <div className="mb-2">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block mb-1">Experience</span>
