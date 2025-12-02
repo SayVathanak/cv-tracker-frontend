@@ -299,13 +299,12 @@ function App() {
     if (input) input.value = ""
   }
 
-  // Inside App function
   const handleUpload = async () => {
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' })
       return
     }
-    
+
     // 1. Start Inline Progress
     setIsUploading(true)
     setUploadProgress(0)
@@ -320,31 +319,54 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const rawPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          // Cap at 90% for upload phase (rest is server processing)
           setUploadProgress(Math.min(rawPercent, 90))
         }
       })
 
-      // 3. Server Responded (Hit 100%)
+      // 3. Server Responded
       setUploadProgress(100)
       setStatus("Finalizing...")
 
-      // Short delay to show the full green bar before resetting
+      // --- CALCULATE ESTIMATED TIME ---
+      const count = res.data.details.length
+      const secondsPerCv = 30 // Based on your observation
+      const totalSeconds = count * secondsPerCv
+
+      let timeMsg = ""
+      if (totalSeconds < 60) {
+        timeMsg = `~${totalSeconds} seconds`
+      } else {
+        const mins = Math.ceil(totalSeconds / 60)
+        timeMsg = `~${mins} minute${mins > 1 ? 's' : ''}`
+      }
+
+      // Short delay to show the full green bar
       setTimeout(() => {
         setIsUploading(false)
-        setStatus(`Done. ${res.data.details.length} uploaded.`)
-        
-        // Show a small toast instead of a big popup
-        Toast.fire({
+        setStatus(`Done. ${count} uploaded.`)
+
+        // Show Success with Time Estimate
+        MySwal.fire({
           icon: 'success',
           title: 'Upload Complete',
-          text: `${res.data.details.length} files processing.`
+          html: `
+            <div style="font-size: 14px; color: #555;">
+              <strong>${count}</strong> files are being processed in the background.<br/>
+              <div style="margin-top: 8px; padding: 8px; background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; color: #b45309; font-weight: bold;">
+                <i class="fas fa-clock"></i> Estimated time: ${timeMsg}
+              </div>
+            </div>
+          `,
+          timer: 6000, // Give them 6 seconds to read it
+          showConfirmButton: true,
+          confirmButtonText: 'Got it',
+          confirmButtonColor: '#000'
         })
-        
+
         fetchCandidates()
         handleClearFiles()
       }, 1000)
-      
+
     } catch (error) {
       console.error(error)
       setIsUploading(false)
@@ -978,7 +1000,7 @@ const ControlPanel = ({
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
   toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy,
-  isUploading, uploadProgress 
+  isUploading, uploadProgress
 }) => {
 
   const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
@@ -986,27 +1008,27 @@ const ControlPanel = ({
 
   return (
     <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
-      
+
       {/* 1. UPLOAD SECTION */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <input 
-             id="fileInput" 
-             type="file" 
-             multiple 
-             onChange={handleFileChange} 
-             className="hidden" 
-             disabled={isUploading} // Lock input during upload
+          <input
+            id="fileInput"
+            type="file"
+            multiple
+            onChange={handleFileChange}
+            className="hidden"
+            disabled={isUploading} // Lock input during upload
           />
-          <label 
-            htmlFor="fileInput" 
+          <label
+            htmlFor="fileInput"
             className={`w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent rounded text-xs font-bold uppercase transition text-zinc-600 select-none
             ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-black hover:text-black cursor-pointer'}`}
           >
             {files.length > 0 ? <><FaCheck /> {files.length} Files Ready</> : <><FaCloudUploadAlt /> Upload PDFs</>}
           </label>
         </div>
-        
+
         {/* Upload Action Buttons */}
         {files.length > 0 && !isUploading && (
           <div className="flex gap-1">
@@ -1023,7 +1045,7 @@ const ControlPanel = ({
       {/* 2. INLINE PROGRESS BAR (The "Installation" Look) */}
       <AnimatePresence>
         {isUploading && (
-          <motion.div 
+          <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -1037,7 +1059,7 @@ const ControlPanel = ({
                 <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${uploadProgress}%` }}
                   transition={{ ease: "easeOut", duration: 0.3 }}
@@ -1078,7 +1100,7 @@ const ControlPanel = ({
       {/* 5. SELECTION TOOLS (Unchanged) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
         {/* ... (Keep your existing Copy/Select buttons code here) ... */}
-         {selectMode ? (
+        {selectMode ? (
           <button onClick={() => handleBulkCopy('selected')} disabled={selectedIds.length === 0} className="w-full h-8 bg-black text-white border border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-1.5">
             <FaCopy size={10} /> Copy ({selectedIds.length})
           </button>
