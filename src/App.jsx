@@ -15,7 +15,7 @@ import {
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
-  FaDownload, FaSpinner, FaSync
+  FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 
@@ -60,6 +60,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
 
   // Selection State
   const [selectedIds, setSelectedIds] = useState([])
@@ -88,6 +90,40 @@ function App() {
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
   useEffect(() => { fetchCandidates(1) }, [])
+
+  // --- CHECK LOGIN ON LOAD ---
+  useEffect(() => {
+    const token = localStorage.getItem("cv_token")
+    if (token) {
+      setIsAuthenticated(true)
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    }
+    fetchCandidates(1)
+  }, [])
+
+  // --- NEW: AUTH HANDLERS ---
+  const handleLoginSuccess = (token) => {
+    localStorage.setItem("cv_token", token)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    setIsAuthenticated(true)
+    setShowLoginModal(false)
+    Toast.fire({ icon: 'success', title: 'Login Successful' })
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("cv_token")
+    delete axios.defaults.headers.common['Authorization']
+    setIsAuthenticated(false)
+    Toast.fire({ icon: 'success', title: 'Logged out' })
+  }
+
+  const checkAuth = () => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true)
+      return false
+    }
+    return true
+  }
 
   // --- GLOBAL DRAG AND DROP HANDLERS ---
   const handleGlobalDragOver = useCallback((e) => {
@@ -298,6 +334,7 @@ function App() {
   }
 
   const handleUpload = async () => {
+    if (!checkAuth()) return;
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' })
       return
@@ -434,6 +471,7 @@ function App() {
 
   const handleDelete = useCallback(async (id, name, e) => {
     e.stopPropagation()
+    if (!checkAuth()) return;
     const result = await MySwal.fire({
       title: 'Delete candidate?',
       text: `Remove ${name}?`,
@@ -457,50 +495,30 @@ function App() {
         Toast.fire({ icon: 'success', title: 'Deleted' })
       } catch (error) { Toast.fire({ icon: 'error', title: 'Failed' }) }
     }
-  }, [showMobilePreview, editingCandidate])
+  }, [isAuthenticated, showMobilePreview, editingCandidate])
 
   const handleBulkDelete = async () => {
+    if (!checkAuth()) return; // Auth Check
     if (selectedIds.length === 0) return
-    const totalUnlocked = candidates.filter(c => !c.locked).length
-    const isDeleteAll = selectedIds.length === totalUnlocked && totalUnlocked > 0
 
-    if (isDeleteAll) {
-      const { value: passcode } = await MySwal.fire({
-        title: 'CRITICAL WARNING',
-        html: `You selected <b>ALL CANDIDATES</b>.<br/>Enter Admin Passcode:`,
-        icon: 'warning',
-        input: 'password',
-        confirmButtonText: 'DELETE EVERYTHING',
-        confirmButtonColor: '#d33',
-        showCancelButton: true
-      })
-      if (passcode) {
-        try {
-          const response = await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: [], passcode })
-          if (response.data.status === "error") MySwal.fire('Error', response.data.message, 'error')
-          else {
-            MySwal.fire('Wiped!', 'Database cleared.', 'success')
-            fetchCandidates()
-            clearSelection()
-          }
-        } catch (error) { MySwal.fire('Error', 'Failed', 'error') }
-      }
-    } else {
-      const result = await MySwal.fire({
-        title: 'Bulk Delete',
-        text: `Delete ${selectedIds.length} candidates?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#000',
-        confirmButtonText: 'Yes'
-      })
-      if (result.isConfirmed) {
-        try {
-          await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
-          fetchCandidates()
-          clearSelection()
-          MySwal.fire('Deleted!', 'Removed successfully.', 'success')
-        } catch (error) { MySwal.fire('Error', 'Failed', 'error') }
+    // Standard Alert (No Passcode)
+    const result = await MySwal.fire({
+      title: 'Bulk Delete',
+      text: `Delete ${selectedIds.length} candidates?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      confirmButtonText: 'Yes, Delete'
+    })
+    
+    if (result.isConfirmed) {
+      try {
+        await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
+        fetchCandidates(); 
+        clearSelection()
+        MySwal.fire('Deleted!', 'Removed successfully.', 'success')
+      } catch (error) { 
+        MySwal.fire('Error', 'Failed', 'error') 
       }
     }
   }
@@ -915,6 +933,13 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      {showLoginModal && (
+        <LoginModal
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={handleLoginSuccess}
+          API_URL={API_URL}
+        />
+      )}
     </div>
   )
 }
@@ -1400,3 +1425,52 @@ const SolidInput = ({ label, name, val, onChange, type = "text" }) => (
     <input type={type} name={name} value={val} onChange={onChange} className="w-full bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition" />
   </div>
 )
+
+// ==================== NEW: LOGIN MODAL COMPONENT ====================
+const LoginModal = ({ onClose, onSuccess, API_URL }) => {
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true); setError("")
+    try {
+      const formData = new FormData()
+      formData.append('username', username)
+      formData.append('password', password)
+
+      const res = await axios.post(`${API_URL}/token`, formData)
+      onSuccess(res.data.access_token)
+    } catch (err) {
+      setError("Invalid username or password")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-lg shadow-2xl w-full max-w-sm overflow-hidden"
+      >
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold flex items-center gap-2"><FaUserShield /> Admin Login</h2>
+            <button onClick={onClose}><BsXLg /></button>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full border p-2 rounded" autoFocus />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border p-2 rounded" />
+            {error && <p className="text-red-500 font-bold text-xs">{error}</p>}
+            <button disabled={loading} className="w-full bg-black text-white font-bold py-2 rounded uppercase text-sm">
+              {loading ? "Verifying..." : "Login"}
+            </button>
+          </form>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
