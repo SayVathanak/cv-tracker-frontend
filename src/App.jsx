@@ -165,7 +165,7 @@ function App() {
     setLoading(true)
     try {
       const res = await axios.get(`${API_URL}/candidates`, {
-        params: { page, limit: 10, search }
+        params: { page, limit: 20, search }
       })
       setCandidates(res.data.data)
       setCurrentPage(res.data.page)
@@ -174,8 +174,6 @@ function App() {
     } catch (error) {
       console.error(error)
     } finally {
-      // Small artificial delay to show off the skeleton (optional, remove in prod)
-      // setTimeout(() => setLoading(false), 300) 
       setLoading(false)
     }
   }
@@ -192,7 +190,7 @@ function App() {
   }
 
   const stats = {
-    total: candidates.length,
+    total: totalItems,
     selected: selectedIds.length,
     topLocation: getMostFrequent(candidates, "Location"),
     topSchool: getMostFrequent(candidates, "School")
@@ -824,7 +822,7 @@ function App() {
             </button>
             <div className="flex flex-col items-center">
               <span className="text-xs font-bold text-black">Page {currentPage} of {totalPages}</span>
-              <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{totalItems} Candidates</span>
+              <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{candidates.length} Candidates</span>
             </div>
             <button
               onClick={() => fetchCandidates(currentPage + 1)}
