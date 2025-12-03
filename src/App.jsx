@@ -91,12 +91,22 @@ function App() {
 
   useEffect(() => { fetchCandidates(1) }, [])
 
-  // --- CHECK LOGIN ON LOAD ---
+  // --- INIT AUTH & DATA ---
   useEffect(() => {
     const token = localStorage.getItem("cv_token")
     if (token) {
       setIsAuthenticated(true)
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+
+      // OPTIONAL: Decode token to get username for UI
+      try {
+        // You need: import { jwtDecode } from "jwt-decode"; (requires install)
+        // OR simpler way (since you control the backend):
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUser(payload.sub);
+      } catch (e) {
+        console.error("Invalid token");
+      }
     }
     fetchCandidates(1)
   }, [])
@@ -334,13 +344,15 @@ function App() {
   }
 
   const handleUpload = async () => {
+    // 1. SECURITY: Check if user is logged in before starting
     if (!checkAuth()) return;
+
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' })
       return
     }
 
-    // 1. Start Inline Progress
+    // 2. Start Inline Progress
     setIsUploading(true)
     setUploadProgress(0)
     setStatus("Uploading...")
@@ -349,7 +361,7 @@ function App() {
     for (let i = 0; i < files.length; i++) formData.append('files', files[i])
 
     try {
-      // 2. Send Request
+      // 3. Send Request (Token is automatically attached via axios defaults)
       const res = await axios.post(`${API_URL}/upload-cv`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
@@ -358,13 +370,13 @@ function App() {
         }
       })
 
-      // 3. Server Responded
+      // 4. Server Responded
       setUploadProgress(100)
       setStatus("Finalizing...")
 
       // --- CALCULATE ESTIMATED TIME ---
       const count = res.data.details.length
-      const secondsPerCv = 30 // Based on your observation
+      const secondsPerCv = 30
       const totalSeconds = count * secondsPerCv
 
       let timeMsg = ""
@@ -375,12 +387,11 @@ function App() {
         timeMsg = `~${mins} minute${mins > 1 ? 's' : ''}`
       }
 
-      // Short delay to show the full green bar
+      // 5. Success UI
       setTimeout(() => {
         setIsUploading(false)
         setStatus(`Done. ${count} uploaded.`)
 
-        // Show Success with Time Estimate
         MySwal.fire({
           icon: 'success',
           title: 'Upload Complete',
@@ -392,7 +403,7 @@ function App() {
               </div>
             </div>
           `,
-          timer: 6000, // Give them 6 seconds to read it
+          timer: 6000,
           showConfirmButton: true,
           confirmButtonText: 'Got it',
           confirmButtonColor: '#000'
@@ -406,7 +417,14 @@ function App() {
       console.error(error)
       setIsUploading(false)
       setStatus("Upload failed.")
-      Toast.fire({ icon: 'error', title: 'Upload Failed' })
+
+      // 6. ERROR HANDLING: Check for expired session
+      if (error.response && error.response.status === 401) {
+        Toast.fire({ icon: 'error', title: 'Session Expired', text: 'Please login again.' })
+        handleLogout() // Forces logout so user can sign in again
+      } else {
+        Toast.fire({ icon: 'error', title: 'Upload Failed' })
+      }
     }
   }
 
@@ -510,15 +528,15 @@ function App() {
       confirmButtonColor: '#d33',
       confirmButtonText: 'Yes, Delete'
     })
-    
+
     if (result.isConfirmed) {
       try {
         await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
-        fetchCandidates(); 
+        fetchCandidates();
         clearSelection()
         MySwal.fire('Deleted!', 'Removed successfully.', 'success')
-      } catch (error) { 
-        MySwal.fire('Error', 'Failed', 'error') 
+      } catch (error) {
+        MySwal.fire('Error', 'Failed', 'error')
       }
     }
   }
@@ -745,6 +763,9 @@ function App() {
         selectMode={selectMode}
         deferredPrompt={deferredPrompt}
         handleInstallClick={handleInstallClick}
+        isAuthenticated={isAuthenticated}
+        setShowLoginModal={setShowLoginModal}
+        handleLogout={handleLogout}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
@@ -968,23 +989,45 @@ const SkeletonLoader = () => {
 }
 
 // ==================== COMPACT NAVBAR ====================
-const Navbar = ({ handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick }) => {
+const Navbar = ({ 
+  handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick,
+  isAuthenticated, setShowLoginModal, handleLogout 
+}) => {
   return (
     <nav className="flex-none border-b border-zinc-200 px-4 h-12 flex items-center justify-between z-20 bg-white shadow-sm">
       <div className="flex items-center gap-2">
         <div className="bg-black text-white p-1.5 rounded cursor-pointer"><FaRobot size={14} /></div>
         <span className="font-bold text-lg tracking-tight">CV<span className="text-zinc-400">Tracker</span></span>
       </div>
+      
       <div className="flex items-center gap-3">
+        {/* AUTH BUTTONS */}
+        {isAuthenticated ? (
+           <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded text-xs font-bold uppercase hover:bg-red-100 transition border border-red-100">
+             <FaSignOutAlt /> Logout
+           </button>
+        ) : (
+           <button onClick={() => setShowLoginModal(true)} className="flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition shadow-md">
+             <FaSignInAlt /> Login
+           </button>
+        )}
+
+        <div className="h-4 w-px bg-zinc-200 mx-1"></div>
+
+        {/* INSTALL PWA BUTTON */}
         {deferredPrompt && (
-          <button onClick={handleInstallClick} className="flex items-center gap-2 px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition animate-pulse">
+          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition animate-pulse">
             <FaDownload /> Install
           </button>
         )}
+
+        {/* EXPORT BUTTON */}
         <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase">
           <FaFileExcel /> Export {selectedCount > 0 ? `(${selectedCount})` : ''}
         </button>
-        <div className="text-xs font-bold text-black border border-zinc-200 px-2 py-1 rounded flex items-center gap-2">
+
+        {/* STATUS INDICATOR */}
+        <div className="hidden sm:flex text-xs font-bold text-black border border-zinc-200 px-2 py-1 rounded items-center gap-2">
           <span className={`w-1.5 h-1.5 rounded-full ${selectMode ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`}></span>
           {selectMode ? `${selectedCount} SELECTED` : 'ONLINE'}
         </div>
