@@ -819,6 +819,7 @@ function App() {
             handleBulkCopy={handleBulkCopy}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
+            isAuthenticated={isAuthenticated}
           />
 
           {/* CANDIDATE LIST */}
