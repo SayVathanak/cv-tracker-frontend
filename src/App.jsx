@@ -1164,7 +1164,7 @@ const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll, handleExitMode, handleBulkDelete,
+  toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy,
   isUploading, uploadProgress, isAuthenticated, handleExport
 }) => {
 
