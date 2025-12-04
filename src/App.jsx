@@ -527,9 +527,10 @@ function App() {
   }, [isAuthenticated, showMobilePreview, editingCandidate])
 
   const handleBulkDelete = async () => {
-    if (!checkAuth()) return;
+    if (!checkAuth()) return; // Auth Check
     if (selectedIds.length === 0) return
 
+    // Standard Alert (No Passcode)
     const result = await MySwal.fire({
       title: 'Bulk Delete',
       text: `Delete ${selectedIds.length} candidates?`,
@@ -541,18 +542,7 @@ function App() {
 
     if (result.isConfirmed) {
       try {
-        // 1. Get the token
-        const token = localStorage.getItem('token');
-
-        // 2. Send request WITH headers
-        await axios.post(
-          `${API_URL}/candidates/bulk-delete`,
-          { candidate_ids: selectedIds },
-          {
-            headers: { Authorization: `Bearer ${token}` } // <--- The missing key
-          }
-        );
-
+        await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
         fetchCandidates();
         clearSelection()
         MySwal.fire('Deleted!', 'Removed successfully.', 'success')
@@ -561,6 +551,7 @@ function App() {
       }
     }
   }
+
 
   const handleClearAll = async () => {
     // ... (Keep existing implementation logic if needed, omitted for brevity as bulk delete covers most)
