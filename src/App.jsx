@@ -527,31 +527,50 @@ function App() {
   }, [isAuthenticated, showMobilePreview, editingCandidate])
 
   const handleBulkDelete = async () => {
-    if (!checkAuth()) return; // Auth Check
-    if (selectedIds.length === 0) return
+    // 1. Safety Checks
+    if (!checkAuth()) return;
+    if (selectedIds.length === 0) return;
 
-    // Standard Alert (No Passcode)
+    // 2. Ask for confirmation (Style matches handleDelete)
     const result = await MySwal.fire({
       title: 'Bulk Delete',
-      text: `Delete ${selectedIds.length} candidates?`,
-      icon: 'warning',
+      text: `Permanently delete ${selectedIds.length} candidates?`,
+      icon: 'question', // Changed to question to match handleDelete
       showCancelButton: true,
-      confirmButtonColor: '#d33',
-      confirmButtonText: 'Yes, Delete'
-    })
+      confirmButtonColor: '#000', // Match handleDelete style
+      confirmButtonText: 'Delete'
+    });
 
+    // 3. If User says "Yes"
     if (result.isConfirmed) {
       try {
-        await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
-        fetchCandidates();
-        clearSelection()
-        MySwal.fire('Deleted!', 'Removed successfully.', 'success')
+        const response = await axios.post(`${API_URL}/candidates/bulk-delete`, { 
+          candidate_ids: selectedIds 
+        });
+
+        if (response.data.status === "success") {
+          fetchCandidates();
+          clearSelection();
+          
+          // Match handleDelete Toast style
+          Toast.fire({ 
+            icon: 'success', 
+            title: 'Deleted', 
+            text: response.data.message 
+          });
+        } else {
+          Toast.fire({ 
+            icon: 'error', 
+            title: 'Error', 
+            text: response.data.message 
+          });
+        }
       } catch (error) {
-        MySwal.fire('Error', 'Failed', 'error')
+        console.error("Bulk Delete Error:", error);
+        Toast.fire({ icon: 'error', title: 'Failed to delete' });
       }
     }
   }
-
 
   const handleClearAll = async () => {
     // ... (Keep existing implementation logic if needed, omitted for brevity as bulk delete covers most)
@@ -819,6 +838,7 @@ function App() {
             handleBulkCopy={handleBulkCopy}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
+            isAuthenticated={isAuthenticated}
           />
 
           {/* CANDIDATE LIST */}
