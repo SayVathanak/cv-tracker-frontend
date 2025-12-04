@@ -15,7 +15,7 @@ import {
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
-  FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt, 
+  FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt,
   FaUserFriends, FaUniversity, FaGlobeAsia, FaBriefcase, FaUserClock, FaChartLine, FaChevronDown
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
@@ -542,15 +542,15 @@ function App() {
     if (result.isConfirmed) {
       try {
         // 1. Get the token
-        const token = localStorage.getItem('token'); 
+        const token = localStorage.getItem('token');
 
         // 2. Send request WITH headers
         await axios.post(
-            `${API_URL}/candidates/bulk-delete`, 
-            { candidate_ids: selectedIds }, 
-            {
-                headers: { Authorization: `Bearer ${token}` } // <--- The missing key
-            }
+          `${API_URL}/candidates/bulk-delete`,
+          { candidate_ids: selectedIds },
+          {
+            headers: { Authorization: `Bearer ${token}` } // <--- The missing key
+          }
         );
 
         fetchCandidates();
@@ -1020,24 +1020,24 @@ const SkeletonLoader = () => {
 }
 
 // ==================== COMPACT NAVBAR ====================
-const Navbar = ({ 
-  deferredPrompt, handleInstallClick, isAuthenticated, 
-  setShowLoginModal, handleLogout, currentUser 
+const Navbar = ({
+  deferredPrompt, handleInstallClick, isAuthenticated,
+  setShowLoginModal, handleLogout, currentUser
 }) => {
-  
+
   const [showMenu, setShowMenu] = useState(false)
   const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?";
 
   return (
     <nav className="flex-none h-14 px-4 border-b border-zinc-100 bg-white flex items-center justify-between z-50 sticky top-0 select-none">
-      
+
       {/* LEFT: LOGO + STACKED GREETING */}
       <div className="flex items-center gap-3">
-      
-        <img 
-          src="/logo.svg" 
-          alt="App Logo" 
-          className="w-8 h-8 object-contain" 
+
+        <img
+          src="/logo.svg"
+          alt="App Logo"
+          className="w-8 h-8 object-contain"
         />
 
         <div className="flex flex-col justify-center">
@@ -1056,22 +1056,22 @@ const Navbar = ({
 
         {isAuthenticated ? (
           <div className="relative ml-2">
-             <button onClick={() => setShowMenu(!showMenu)} onBlur={() => setTimeout(() => setShowMenu(false), 200)} className="flex items-center gap-1 outline-none group">
-               <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 transition">{userInitial}</div>
-               <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
-             </button>
-             <AnimatePresence>
-               {showMenu && (
-                 <motion.div initial={{ opacity: 0, y: 5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.95 }} transition={{ duration: 0.1 }} className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50">
-                    <div className="p-1">
-                      <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition text-left"><FaSignOutAlt /> Sign Out</button>
-                    </div>
-                 </motion.div>
-               )}
-             </AnimatePresence>
+            <button onClick={() => setShowMenu(!showMenu)} onBlur={() => setTimeout(() => setShowMenu(false), 200)} className="flex items-center gap-1 outline-none group">
+              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 transition">{userInitial}</div>
+              <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
+            </button>
+            <AnimatePresence>
+              {showMenu && (
+                <motion.div initial={{ opacity: 0, y: 5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.95 }} transition={{ duration: 0.1 }} className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50">
+                  <div className="p-1">
+                    <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition text-left"><FaSignOutAlt /> Sign Out</button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         ) : (
-           <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">Login</button>
+          <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">Login</button>
         )}
       </div>
     </nav>
@@ -1079,14 +1079,14 @@ const Navbar = ({
 }
 
 const StatusBar = ({ loading, totalItems }) => {
-  
+
   // Format: "Wed, Oct 25"
   const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' }
   const today = new Date().toLocaleDateString('en-US', dateOptions)
 
   return (
     <div className="flex-none px-4 h-10 border-b border-zinc-100 bg-white flex items-center justify-between z-10 select-none">
-      
+
       {/* LEFT: SUBTLE DATE */}
       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
         {today}
@@ -1167,37 +1167,37 @@ const ControlPanel = ({
   toggleSelectAll, handleExitMode, handleBulkDelete,
   isUploading, uploadProgress, isAuthenticated, handleExport
 }) => {
-  
+
   // Logic to check if all items on the current page are selected
   const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
   const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
 
   return (
     <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
-      
+
       {/* 1. TOP ROW: UPLOAD & EXPORT TOOLS */}
       <div className="flex gap-2 h-8">
-        
+
         {/* A. File Input (The big button) */}
         <div className="relative flex-1 h-full">
-          <input 
-            id="fileInput" 
-            type="file" 
-            multiple 
-            onChange={handleFileChange} 
-            className="hidden" 
-            disabled={isUploading} 
+          <input
+            id="fileInput"
+            type="file"
+            multiple
+            onChange={handleFileChange}
+            className="hidden"
+            disabled={isUploading}
           />
-          <label 
-            htmlFor="fileInput" 
+          <label
+            htmlFor="fileInput"
             className={`w-full h-full flex justify-center items-center gap-2 border border-transparent rounded text-xs font-bold uppercase transition select-none 
-              ${isUploading 
-                ? 'opacity-50 cursor-not-allowed bg-zinc-100' 
+              ${isUploading
+                ? 'opacity-50 cursor-not-allowed bg-zinc-100'
                 : 'hover:border-black cursor-pointer bg-zinc-100 text-zinc-600 hover:text-black'
               }`}
           >
-            {files.length > 0 
-              ? <><FaCheck /> {files.length} Ready</> 
+            {files.length > 0
+              ? <><FaCheck /> {files.length} Ready</>
               : <><FaCloudUploadAlt /> Upload PDFs</>
             }
           </label>
@@ -1206,14 +1206,14 @@ const ControlPanel = ({
         {/* B. Upload Actions (Visible only when files are selected) */}
         {files.length > 0 && !isUploading && (
           <>
-            <button 
-              onClick={handleUpload} 
+            <button
+              onClick={handleUpload}
               className="px-4 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition"
             >
               Start
             </button>
-            <button 
-              onClick={handleClearFiles} 
+            <button
+              onClick={handleClearFiles}
               className="px-3 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"
             >
               <FaTrash size={12} />
@@ -1222,18 +1222,18 @@ const ControlPanel = ({
         )}
 
         {/* C. Export Button (Always visible for quick access) */}
-        <button 
-          onClick={handleExport} 
+        <button
+          onClick={handleExport}
           title={selectedIds.length > 0 ? `Export ${selectedIds.length} Selected` : "Export All"}
           className={`px-3 h-full border rounded transition flex items-center justify-center gap-2
-            ${selectedIds.length > 0 
+            ${selectedIds.length > 0
               ? 'bg-white text-black border-zinc-100'  // Active Style (Black)
               : 'bg-white border-zinc-200 text-green-700 hover:border-black' // Default Style (White)
             }`}
         >
           <FaFileExcel className='text-green-700' size={14} />
           {selectedIds.length > 0 && (
-             <span className="text-xs font-medium">({selectedIds.length})</span>
+            <span className="text-xs font-medium">({selectedIds.length})</span>
           )}
         </button>
       </div>
@@ -1241,10 +1241,10 @@ const ControlPanel = ({
       {/* 2. PROGRESS BAR (Animated) */}
       <AnimatePresence>
         {isUploading && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }} 
-            animate={{ height: "auto", opacity: 1 }} 
-            exit={{ height: 0, opacity: 0 }} 
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
             <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
@@ -1255,11 +1255,11 @@ const ControlPanel = ({
                 <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }} 
-                  animate={{ width: `${uploadProgress}%` }} 
-                  transition={{ ease: "easeOut", duration: 0.3 }} 
-                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`} 
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress}%` }}
+                  transition={{ ease: "easeOut", duration: 0.3 }}
+                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}
                 />
               </div>
             </div>
@@ -1270,16 +1270,16 @@ const ControlPanel = ({
       {/* 3. SEARCH & SORT BAR */}
       <div className="relative">
         <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
-        <input 
-          type="text" 
-          placeholder="Search candidates..." 
-          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400" 
-          value={searchTerm} 
-          onChange={(e) => setSearchTerm(e.target.value)} 
+        <input
+          type="text"
+          placeholder="Search candidates..."
+          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <select 
-          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black" 
-          value={sortOption} 
+        <select
+          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black"
+          value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
         >
           <option value="newest">Newest</option>
@@ -1290,43 +1290,45 @@ const ControlPanel = ({
 
       {/* 4. BOTTOM ACTION ROW (Select & Bulk Operations) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
-        
+
         {/* Copy All Button */}
-        <button className="w-full h-8 bg-white text-black border border-zinc-300 rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5">
-           <FaCopy size={10} /> Copy All
+        <button
+          onClick={handleBulkCopy}
+          className="w-full h-8 bg-white text-black border border-zinc-300 rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5">
+          <FaCopy size={10} /> Copy All
         </button>
-        
+
         {/* Selection Tools */}
         <div className="flex gap-1.5">
           {/* Toggle Select Mode */}
-          <button 
-            onClick={selectMode ? handleExitMode : () => setSelectMode(true)} 
+          <button
+            onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
             className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1 
-              ${selectMode 
-                ? 'w-8 bg-red-50 text-red-600 border-red-200' 
+              ${selectMode
+                ? 'w-8 bg-red-50 text-red-600 border-red-200'
                 : 'flex-1 bg-black text-white border-black hover:bg-zinc-800'
               }`}
           >
             {selectMode ? <FaTimes size={12} /> : 'Select'}
           </button>
-          
+
           {/* Active Selection Buttons */}
           {selectMode && (
             <>
-              <button 
-                onClick={toggleSelectAll} 
+              <button
+                onClick={toggleSelectAll}
                 className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white"
               >
                 {isPageFullySelected ? 'None' : 'All'}
               </button>
-              
-              <button 
-                onClick={handleBulkDelete} 
-                disabled={selectedIds.length === 0 || !isAuthenticated} 
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.length === 0 || !isAuthenticated}
                 title={!isAuthenticated ? "Login required" : "Delete Selected"}
                 className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition 
-                  ${selectedIds.length > 0 && isAuthenticated 
-                    ? 'bg-red-500 hover:bg-red-600' 
+                  ${selectedIds.length > 0 && isAuthenticated
+                    ? 'bg-red-500 hover:bg-red-600'
                     : 'bg-zinc-200 cursor-not-allowed'
                   }`}
               >
