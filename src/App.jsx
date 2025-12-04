@@ -15,7 +15,8 @@ import {
   FaSearch, FaPhoneAlt, FaMapMarkerAlt, FaBirthdayCake,
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
-  FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt
+  FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt, 
+  FaUserFriends, FaUniversity, FaGlobeAsia, FaBriefcase, FaUserClock, FaChartLine, FaChevronDown
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 
@@ -29,6 +30,16 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString();
+
+// --- HELPER: DECODE TOKEN ---
+const getUserFromToken = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.sub; // 'sub' holds the username in your Python JWT
+  } catch (e) {
+    return null;
+  }
+}
 
 // --- HELPER: DATE FORMATTER ---
 const formatDOB = (dateString) => {
@@ -60,6 +71,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
+  const [currentUser, setCurrentUser] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
 
@@ -91,31 +103,29 @@ function App() {
 
   useEffect(() => { fetchCandidates(1) }, [])
 
-  // --- INIT AUTH & DATA ---
+  // --- INIT AUTH ---
   useEffect(() => {
     const token = localStorage.getItem("cv_token")
     if (token) {
       setIsAuthenticated(true)
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 
-      // OPTIONAL: Decode token to get username for UI
-      try {
-        // You need: import { jwtDecode } from "jwt-decode"; (requires install)
-        // OR simpler way (since you control the backend):
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setCurrentUser(payload.sub);
-      } catch (e) {
-        console.error("Invalid token");
-      }
+      // NEW: Recover username from token on reload
+      const username = getUserFromToken(token)
+      if (username) setCurrentUser(username)
     }
     fetchCandidates(1)
   }, [])
 
-  // --- NEW: AUTH HANDLERS ---
-  const handleLoginSuccess = (token) => {
+  // --- AUTH HANDLERS ---
+  const handleLoginSuccess = (token, username) => {
     localStorage.setItem("cv_token", token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setIsAuthenticated(true)
+
+    // NEW: Set the user immediately
+    setCurrentUser(username)
+
     setShowLoginModal(false)
     Toast.fire({ icon: 'success', title: 'Login Successful' })
   }
@@ -124,6 +134,7 @@ function App() {
     localStorage.removeItem("cv_token")
     delete axios.defaults.headers.common['Authorization']
     setIsAuthenticated(false)
+    setCurrentUser(null) // <--- Clear it on logout
     Toast.fire({ icon: 'success', title: 'Logged out' })
   }
 
@@ -763,6 +774,7 @@ function App() {
         selectMode={selectMode}
         deferredPrompt={deferredPrompt}
         handleInstallClick={handleInstallClick}
+        currentUser={currentUser}
         isAuthenticated={isAuthenticated}
         setShowLoginModal={setShowLoginModal}
         handleLogout={handleLogout}
@@ -773,7 +785,14 @@ function App() {
         <div className={`flex flex-col w-full lg:w-[500px] xl:w-[550px] border-r border-zinc-200 h-full transition-all duration-300 z-10 bg-white
           ${showMobilePreview ? 'hidden lg:flex' : 'flex'}
         `}>
-          <StatsPanel stats={stats} loading={loading} />
+          {/* <StatsPanel stats={stats} loading={loading} /> */}
+          {/* <DashboardPanel candidates={candidates} loading={loading} /> */}
+          <WelcomePanel
+            candidates={candidates}
+            loading={loading}
+            currentUser={currentUser}
+            totalItems={totalItems}
+          />
           <ControlPanel
             files={files}
             loading={loading}
@@ -991,58 +1010,178 @@ const SkeletonLoader = () => {
 // ==================== COMPACT NAVBAR ====================
 const Navbar = ({ 
   handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick,
-  isAuthenticated, setShowLoginModal, handleLogout 
+  isAuthenticated, setShowLoginModal, handleLogout, currentUser 
 }) => {
+  
+  // State for the dropdown menu
+  const [showMenu, setShowMenu] = useState(false)
+
+  const userInitial = (currentUser && currentUser.length > 0) 
+    ? currentUser.charAt(0).toUpperCase() 
+    : "?";
+
   return (
-    <nav className="flex-none border-b border-zinc-200 px-4 h-12 flex items-center justify-between z-20 bg-white shadow-sm">
-      <div className="flex items-center gap-2">
-        <div className="bg-black text-white p-1.5 rounded cursor-pointer"><FaRobot size={14} /></div>
-        <span className="font-bold text-lg tracking-tight">CV<span className="text-zinc-400">Tracker</span></span>
-      </div>
+    <nav className="flex-none border-b border-zinc-200 px-4 h-14 flex items-center justify-between z-50 bg-white sticky top-0 shadow-sm">
       
-      <div className="flex items-center gap-3">
-        {/* AUTH BUTTONS */}
-        {isAuthenticated ? (
-           <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded text-xs font-bold uppercase hover:bg-red-100 transition border border-red-100">
-             <FaSignOutAlt /> Logout
-           </button>
-        ) : (
-           <button onClick={() => setShowLoginModal(true)} className="flex items-center gap-2 px-3 py-1 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition shadow-md">
-             <FaSignInAlt /> Login
-           </button>
-        )}
+      {/* LEFT: BRAND */}
+      <div className="flex items-center gap-2.5">
+        <div className="bg-black text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-lg">
+          <FaRobot size={16} />
+        </div>
+        <div className="hidden sm:block leading-none">
+          <h1 className="font-bold text-sm tracking-tight text-black">CV TRACKER</h1>
+          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Intelligent HR</span>
+        </div>
+      </div>
 
-        <div className="h-4 w-px bg-zinc-200 mx-1"></div>
-
-        {/* INSTALL PWA BUTTON */}
+      {/* RIGHT: ACTIONS */}
+      <div className="flex items-center gap-2">
+        
+        {/* App Install & Export Buttons (Keep these the same) */}
         {deferredPrompt && (
-          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-2 py-1 bg-blue-600 text-white rounded text-xs font-bold uppercase hover:bg-blue-700 transition animate-pulse">
-            <FaDownload /> Install
+          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase hover:bg-blue-100 transition">
+            <FaDownload size={10} /> App
           </button>
         )}
 
-        {/* EXPORT BUTTON */}
-        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1 border border-zinc-200 rounded font-bold text-xs hover:bg-black hover:text-white transition uppercase">
-          <FaFileExcel /> Export {selectedCount > 0 ? `(${selectedCount})` : ''}
+        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 border border-zinc-200 rounded-full text-[10px] font-bold uppercase hover:border-black hover:bg-black hover:text-white transition">
+          <FaFileExcel size={10} /> <span className="hidden sm:inline">Export CSV</span>
+          {selectedCount > 0 && <span className="bg-black text-white px-1.5 rounded-full">{selectedCount}</span>}
         </button>
 
-        {/* STATUS INDICATOR */}
-        <div className="hidden sm:flex text-xs font-bold text-black border border-zinc-200 px-2 py-1 rounded items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${selectMode ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`}></span>
-          {selectMode ? `${selectedCount} SELECTED` : 'ONLINE'}
-        </div>
+        <div className="w-px h-4 bg-zinc-200 mx-1"></div>
+
+        {/* AUTH SECTION: DROPDOWN MENU */}
+        {isAuthenticated ? (
+          <div className="relative">
+             
+             {/* THE TRIGGER BUTTON */}
+             <button 
+               onClick={() => setShowMenu(!showMenu)}
+               onBlur={() => setTimeout(() => setShowMenu(false), 200)} // Close when clicking away
+               className="flex items-center gap-2 pl-1 group outline-none"
+             >
+               <div className="w-8 h-8 rounded-full bg-zinc-900 text-white border border-zinc-200 flex items-center justify-center text-xs font-bold shadow-sm group-hover:bg-zinc-700 transition">
+                 {userInitial}
+               </div>
+               <FaChevronDown size={10} className={`text-zinc-400 transition-transform duration-200 ${showMenu ? 'rotate-180' : ''}`} />
+             </button>
+
+             {/* THE DROPDOWN MENU */}
+             <AnimatePresence>
+               {showMenu && (
+                 <motion.div
+                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                   animate={{ opacity: 1, y: 0, scale: 1 }}
+                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                   transition={{ duration: 0.1 }}
+                   className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-zinc-100 overflow-hidden z-50"
+                 >
+                    {/* Header */}
+                    <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
+                      <p className="text-xs font-bold text-black truncate">{currentUser}</p>
+                      <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold mt-0.5">Administrator</p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="p-1">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition text-left"
+                      >
+                        <FaSignOutAlt /> Sign Out
+                      </button>
+                    </div>
+                 </motion.div>
+               )}
+             </AnimatePresence>
+
+          </div>
+        ) : (
+           <button 
+             onClick={() => setShowLoginModal(true)} 
+             className="flex items-center gap-2 px-5 py-1.5 bg-black text-white rounded-full text-[10px] font-bold uppercase hover:bg-zinc-800 shadow-md transition"
+           >
+             Login
+           </button>
+        )}
       </div>
     </nav>
+  )
+}
+
+const WelcomePanel = ({ candidates, loading, currentUser, totalItems }) => {
+  
+  const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' }
+  const today = new Date().toLocaleDateString('en-US', dateOptions)
+
+  return (
+    <div className="flex-none px-6 py-6 border-b border-zinc-200 bg-white flex items-center justify-between shadow-sm z-10 relative">
+      
+      {/* LEFT: GREETING */}
+      <div>
+        <h1 className="text-2xl font-bold text-black tracking-tight flex items-center gap-2">
+          Welcome back, <span className="text-zinc-500">{currentUser || "Admin"}</span>
+        </h1>
+        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mt-1">
+          {today}
+        </p>
+      </div>
+
+      {/* RIGHT: THE BIG NUMBER */}
+      <div className="text-right">
+        <div className="text-4xl font-medium text-black leading-none tracking-tighter">
+          {loading ? "..." : totalItems} 
+        </div>
+        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">
+          Candidates
+        </p>
+      </div>
+
+    </div>
   )
 }
 
 // ==================== STATS PANEL ====================
 const StatsPanel = ({ stats, loading }) => {
   return (
-    <div className="flex-none p-3 border-b border-zinc-100 grid grid-cols-3 gap-2 bg-zinc-50/50">
-      <StatItem label="Candidates" val={stats.total} loading={loading} />
-      <StatItem label="Top Region" val={stats.topLocation} loading={loading} />
-      <StatItem label="Top School" val={stats.topSchool} loading={loading} />
+    <div className="flex-none p-4 border-b border-zinc-200 bg-zinc-50">
+      <div className="grid grid-cols-3 gap-3">
+
+        {/* Total Candidates */}
+        <div className="bg-white p-3 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between h-20">
+          <div className="flex justify-between items-start">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Total</span>
+            <FaUserFriends className="text-zinc-200" size={14} />
+          </div>
+          <p className="text-xl font-bold text-black truncate">
+            {loading ? "..." : stats.total}
+          </p>
+        </div>
+
+        {/* Top Region */}
+        <div className="bg-white p-3 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between h-20">
+          <div className="flex justify-between items-start">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Region</span>
+            <FaGlobeAsia className="text-zinc-200" size={14} />
+          </div>
+          <p className="text-xs font-bold text-black line-clamp-2 leading-tight">
+            {loading ? "..." : stats.topLocation}
+          </p>
+        </div>
+
+        {/* Top School */}
+        <div className="bg-white p-3 rounded-lg border border-zinc-200 shadow-sm flex flex-col justify-between h-20">
+          <div className="flex justify-between items-start">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">School</span>
+            <FaUniversity className="text-zinc-200" size={14} />
+          </div>
+          <p className="text-xs font-bold text-black line-clamp-2 leading-tight">
+            {loading ? "..." : stats.topSchool}
+          </p>
+        </div>
+
+      </div>
     </div>
   )
 }
