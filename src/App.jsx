@@ -527,10 +527,9 @@ function App() {
   }, [isAuthenticated, showMobilePreview, editingCandidate])
 
   const handleBulkDelete = async () => {
-    if (!checkAuth()) return; // Auth Check
+    if (!checkAuth()) return;
     if (selectedIds.length === 0) return
 
-    // Standard Alert (No Passcode)
     const result = await MySwal.fire({
       title: 'Bulk Delete',
       text: `Delete ${selectedIds.length} candidates?`,
@@ -542,7 +541,18 @@ function App() {
 
     if (result.isConfirmed) {
       try {
-        await axios.post(`${API_URL}/candidates/bulk-delete`, { candidate_ids: selectedIds })
+        // 1. Get the token
+        const token = localStorage.getItem('token'); 
+
+        // 2. Send request WITH headers
+        await axios.post(
+            `${API_URL}/candidates/bulk-delete`, 
+            { candidate_ids: selectedIds }, 
+            {
+                headers: { Authorization: `Bearer ${token}` } // <--- The missing key
+            }
+        );
+
         fetchCandidates();
         clearSelection()
         MySwal.fire('Deleted!', 'Removed successfully.', 'success')
@@ -787,12 +797,13 @@ function App() {
         `}>
           {/* <StatsPanel stats={stats} loading={loading} /> */}
           {/* <DashboardPanel candidates={candidates} loading={loading} /> */}
-          <WelcomePanel
+          {/* <WelcomePanel
             candidates={candidates}
             loading={loading}
             currentUser={currentUser}
             totalItems={totalItems}
-          />
+          /> */}
+          <StatusBar loading={loading} totalItems={totalItems} />
           <ControlPanel
             files={files}
             loading={loading}
@@ -804,6 +815,7 @@ function App() {
             processedCandidates={processedCandidates}
             handleFileChange={handleFileChange}
             handleUpload={handleUpload}
+            handleExport={handleExport}
             handleClearFiles={handleClearFiles}
             setSearchTerm={setSearchTerm}
             setSortOption={setSortOption}
@@ -1009,133 +1021,81 @@ const SkeletonLoader = () => {
 
 // ==================== COMPACT NAVBAR ====================
 const Navbar = ({ 
-  handleExport, selectedCount, selectMode, deferredPrompt, handleInstallClick,
-  isAuthenticated, setShowLoginModal, handleLogout, currentUser 
+  deferredPrompt, handleInstallClick, isAuthenticated, 
+  setShowLoginModal, handleLogout, currentUser 
 }) => {
   
-  // State for the dropdown menu
   const [showMenu, setShowMenu] = useState(false)
-
-  const userInitial = (currentUser && currentUser.length > 0) 
-    ? currentUser.charAt(0).toUpperCase() 
-    : "?";
+  const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?";
 
   return (
-    <nav className="flex-none border-b border-zinc-200 px-4 h-14 flex items-center justify-between z-50 bg-white sticky top-0 shadow-sm">
+    <nav className="flex-none h-14 px-4 border-b border-zinc-100 bg-white flex items-center justify-between z-50 sticky top-0 select-none">
       
-      {/* LEFT: BRAND */}
-      <div className="flex items-center gap-2.5">
-        <div className="bg-black text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-lg">
-          <FaRobot size={16} />
-        </div>
-        <div className="hidden sm:block leading-none">
-          <h1 className="font-bold text-sm tracking-tight text-black">CV TRACKER</h1>
-          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Intelligent HR</span>
+      {/* LEFT: LOGO + STACKED GREETING */}
+      <div className="flex items-center gap-3">
+      
+        <img 
+          src="/logo.svg" 
+          alt="App Logo" 
+          className="w-8 h-8 object-contain" 
+        />
+
+        <div className="flex flex-col justify-center">
+          <span className="text-xs font-medium text-zinc-400 leading-none mb-0.5">Welcome Back,</span>
+          <span className="text-xl font-bold text-black tracking-tight leading-none">{currentUser || "Guest"}.</span>
         </div>
       </div>
 
       {/* RIGHT: ACTIONS */}
       <div className="flex items-center gap-2">
-        
-        {/* App Install & Export Buttons (Keep these the same) */}
         {deferredPrompt && (
-          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase hover:bg-blue-100 transition">
+          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-3 py-1.5 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-50 transition">
             <FaDownload size={10} /> App
           </button>
         )}
 
-        <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 border border-zinc-200 rounded-full text-[10px] font-bold uppercase hover:border-black hover:bg-black hover:text-white transition">
-          <FaFileExcel size={10} /> <span className="hidden sm:inline">Export CSV</span>
-          {selectedCount > 0 && <span className="bg-black text-white px-1.5 rounded-full">{selectedCount}</span>}
-        </button>
-
-        <div className="w-px h-4 bg-zinc-200 mx-1"></div>
-
-        {/* AUTH SECTION: DROPDOWN MENU */}
         {isAuthenticated ? (
-          <div className="relative">
-             
-             {/* THE TRIGGER BUTTON */}
-             <button 
-               onClick={() => setShowMenu(!showMenu)}
-               onBlur={() => setTimeout(() => setShowMenu(false), 200)} // Close when clicking away
-               className="flex items-center gap-2 pl-1 group outline-none"
-             >
-               <div className="w-8 h-8 rounded-full bg-zinc-900 text-white border border-zinc-200 flex items-center justify-center text-xs font-bold shadow-sm group-hover:bg-zinc-700 transition">
-                 {userInitial}
-               </div>
-               <FaChevronDown size={10} className={`text-zinc-400 transition-transform duration-200 ${showMenu ? 'rotate-180' : ''}`} />
+          <div className="relative ml-2">
+             <button onClick={() => setShowMenu(!showMenu)} onBlur={() => setTimeout(() => setShowMenu(false), 200)} className="flex items-center gap-1 outline-none group">
+               <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 transition">{userInitial}</div>
+               <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
              </button>
-
-             {/* THE DROPDOWN MENU */}
              <AnimatePresence>
                {showMenu && (
-                 <motion.div
-                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                   transition={{ duration: 0.1 }}
-                   className="absolute right-0 top-10 w-48 bg-white rounded-xl shadow-xl border border-zinc-100 overflow-hidden z-50"
-                 >
-                    {/* Header */}
-                    <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50/50">
-                      <p className="text-xs font-bold text-black truncate">{currentUser}</p>
-                      <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold mt-0.5">Administrator</p>
-                    </div>
-
-                    {/* Actions */}
+                 <motion.div initial={{ opacity: 0, y: 5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.95 }} transition={{ duration: 0.1 }} className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50">
                     <div className="p-1">
-                      <button 
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition text-left"
-                      >
-                        <FaSignOutAlt /> Sign Out
-                      </button>
+                      <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition text-left"><FaSignOutAlt /> Sign Out</button>
                     </div>
                  </motion.div>
                )}
              </AnimatePresence>
-
           </div>
         ) : (
-           <button 
-             onClick={() => setShowLoginModal(true)} 
-             className="flex items-center gap-2 px-5 py-1.5 bg-black text-white rounded-full text-[10px] font-bold uppercase hover:bg-zinc-800 shadow-md transition"
-           >
-             Login
-           </button>
+           <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">Login</button>
         )}
       </div>
     </nav>
   )
 }
 
-const WelcomePanel = ({ candidates, loading, currentUser, totalItems }) => {
+const StatusBar = ({ loading, totalItems }) => {
   
-  const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' }
+  // Format: "Wed, Oct 25"
+  const dateOptions = { weekday: 'short', month: 'short', day: 'numeric' }
   const today = new Date().toLocaleDateString('en-US', dateOptions)
 
   return (
-    <div className="flex-none px-6 py-6 border-b border-zinc-200 bg-white flex items-center justify-between shadow-sm z-10 relative">
+    <div className="flex-none px-4 h-10 border-b border-zinc-100 bg-white flex items-center justify-between z-10 select-none">
       
-      {/* LEFT: GREETING */}
-      <div>
-        <h1 className="text-2xl font-bold text-black tracking-tight flex items-center gap-2">
-          Welcome back, <span className="text-zinc-500">{currentUser || "Admin"}</span>
-        </h1>
-        <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mt-1">
-          {today}
-        </p>
-      </div>
+      {/* LEFT: SUBTLE DATE */}
+      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+        {today}
+      </span>
 
-      {/* RIGHT: THE BIG NUMBER */}
-      <div className="text-right">
-        <div className="text-4xl font-medium text-black leading-none tracking-tighter">
-          {loading ? "..." : totalItems} 
-        </div>
-        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">
-          Candidates
-        </p>
+      {/* RIGHT: CLEAN COUNT */}
+      <div className="text-[10px]">
+        <span className="font-bold text-zinc-400 uppercase tracking-wider mr-2">Candidates</span>
+        <span className="font-bold text-black">{loading ? "..." : totalItems}</span>
       </div>
 
     </div>
@@ -1204,56 +1164,87 @@ const ControlPanel = ({
   files, loading, status, searchTerm, sortOption, selectMode,
   selectedIds, processedCandidates, handleFileChange, handleUpload,
   handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy,
-  isUploading, uploadProgress
+  toggleSelectAll, handleExitMode, handleBulkDelete,
+  isUploading, uploadProgress, isAuthenticated, handleExport
 }) => {
-
+  
+  // Logic to check if all items on the current page are selected
   const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
   const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
 
   return (
     <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
-
-      {/* 1. UPLOAD SECTION */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <input
-            id="fileInput"
-            type="file"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-            disabled={isUploading} // Lock input during upload
+      
+      {/* 1. TOP ROW: UPLOAD & EXPORT TOOLS */}
+      <div className="flex gap-2 h-8">
+        
+        {/* A. File Input (The big button) */}
+        <div className="relative flex-1 h-full">
+          <input 
+            id="fileInput" 
+            type="file" 
+            multiple 
+            onChange={handleFileChange} 
+            className="hidden" 
+            disabled={isUploading} 
           />
-          <label
-            htmlFor="fileInput"
-            className={`w-full h-8 flex justify-center items-center gap-2 bg-zinc-100 border border-transparent rounded text-xs font-bold uppercase transition text-zinc-600 select-none
-            ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:border-black hover:text-black cursor-pointer'}`}
+          <label 
+            htmlFor="fileInput" 
+            className={`w-full h-full flex justify-center items-center gap-2 border border-transparent rounded text-xs font-bold uppercase transition select-none 
+              ${isUploading 
+                ? 'opacity-50 cursor-not-allowed bg-zinc-100' 
+                : 'hover:border-black cursor-pointer bg-zinc-100 text-zinc-600 hover:text-black'
+              }`}
           >
-            {files.length > 0 ? <><FaCheck /> {files.length} Files Ready</> : <><FaCloudUploadAlt /> Upload PDFs</>}
+            {files.length > 0 
+              ? <><FaCheck /> {files.length} Ready</> 
+              : <><FaCloudUploadAlt /> Upload PDFs</>
+            }
           </label>
         </div>
 
-        {/* Upload Action Buttons */}
+        {/* B. Upload Actions (Visible only when files are selected) */}
         {files.length > 0 && !isUploading && (
-          <div className="flex gap-1">
-            <button onClick={handleUpload} className="px-4 h-8 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition">
-              Upload
+          <>
+            <button 
+              onClick={handleUpload} 
+              className="px-4 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition"
+            >
+              Start
             </button>
-            <button onClick={handleClearFiles} className="px-2 h-8 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition">
+            <button 
+              onClick={handleClearFiles} 
+              className="px-3 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"
+            >
               <FaTrash size={12} />
             </button>
-          </div>
+          </>
         )}
+
+        {/* C. Export Button (Always visible for quick access) */}
+        <button 
+          onClick={handleExport} 
+          title={selectedIds.length > 0 ? `Export ${selectedIds.length} Selected` : "Export All"}
+          className={`px-3 h-full border rounded transition flex items-center justify-center gap-2
+            ${selectedIds.length > 0 
+              ? 'bg-white text-black border-zinc-100'  // Active Style (Black)
+              : 'bg-white border-zinc-200 text-green-700 hover:border-black' // Default Style (White)
+            }`}
+        >
+          <FaFileExcel className='text-green-700' size={14} />
+          {selectedIds.length > 0 && (
+             <span className="text-xs font-medium">({selectedIds.length})</span>
+          )}
+        </button>
       </div>
 
-      {/* 2. INLINE PROGRESS BAR (The "Installation" Look) */}
+      {/* 2. PROGRESS BAR (Animated) */}
       <AnimatePresence>
         {isUploading && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }} 
+            animate={{ height: "auto", opacity: 1 }} 
+            exit={{ height: 0, opacity: 0 }} 
             className="overflow-hidden"
           >
             <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
@@ -1264,11 +1255,11 @@ const ControlPanel = ({
                 <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${uploadProgress}%` }}
-                  transition={{ ease: "easeOut", duration: 0.3 }}
-                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}
+                <motion.div 
+                  initial={{ width: 0 }} 
+                  animate={{ width: `${uploadProgress}%` }} 
+                  transition={{ ease: "easeOut", duration: 0.3 }} 
+                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`} 
                 />
               </div>
             </div>
@@ -1276,61 +1267,76 @@ const ControlPanel = ({
         )}
       </AnimatePresence>
 
-      {/* 3. STATUS MESSAGE (If exists and NOT uploading) */}
-      {status && !isUploading && (
-        <div className="text-xs text-center py-1 bg-zinc-50 rounded border border-zinc-200 text-zinc-500 truncate">
-          {status}
-        </div>
-      )}
-
-      {/* 4. SEARCH & SORT (Unchanged) */}
+      {/* 3. SEARCH & SORT BAR */}
       <div className="relative">
         <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
-        <input
-          type="text" placeholder="Search..."
-          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black focus:border-black outline-none transition placeholder:text-zinc-400"
-          value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+        <input 
+          type="text" 
+          placeholder="Search candidates..." 
+          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400" 
+          value={searchTerm} 
+          onChange={(e) => setSearchTerm(e.target.value)} 
         />
-        <select
-          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black"
-          value={sortOption} onChange={(e) => setSortOption(e.target.value)}
+        <select 
+          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black" 
+          value={sortOption} 
+          onChange={(e) => setSortOption(e.target.value)}
         >
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
           <option value="nameAsc">Name (A-Z)</option>
-          <option value="schoolAsc">School</option>
         </select>
       </div>
 
-      {/* 5. SELECTION TOOLS (Unchanged) */}
+      {/* 4. BOTTOM ACTION ROW (Select & Bulk Operations) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
-        {/* ... (Keep your existing Copy/Select buttons code here) ... */}
-        {selectMode ? (
-          <button onClick={() => handleBulkCopy('selected')} disabled={selectedIds.length === 0} className="w-full h-8 bg-black text-white border border-black rounded text-xs font-bold uppercase hover:bg-zinc-800 transition disabled:opacity-50 flex items-center justify-center gap-1.5">
-            <FaCopy size={10} /> Copy ({selectedIds.length})
-          </button>
-        ) : (
-          <button onClick={() => handleBulkCopy('all')} disabled={processedCandidates.length === 0} className="w-full h-8 bg-white text-black border border-zinc-300 hover:border-black rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5">
-            <FaCopy size={10} /> Copy All
-          </button>
-        )}
-
+        
+        {/* Copy All Button */}
+        <button className="w-full h-8 bg-white text-black border border-zinc-300 rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5">
+           <FaCopy size={10} /> Copy All
+        </button>
+        
+        {/* Selection Tools */}
         <div className="flex gap-1.5">
-          <button onClick={selectMode ? handleExitMode : () => setSelectMode(true)} className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1 ${selectMode ? 'w-8 bg-red-50 text-red-600 border-red-200 hover:border-red-500' : 'flex-1 bg-black text-white border-black hover:bg-zinc-800'}`} title={selectMode ? "Exit Selection" : "Select"}>
+          {/* Toggle Select Mode */}
+          <button 
+            onClick={selectMode ? handleExitMode : () => setSelectMode(true)} 
+            className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1 
+              ${selectMode 
+                ? 'w-8 bg-red-50 text-red-600 border-red-200' 
+                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800'
+              }`}
+          >
             {selectMode ? <FaTimes size={12} /> : 'Select'}
           </button>
+          
+          {/* Active Selection Buttons */}
           {selectMode && (
             <>
-              <button onClick={toggleSelectAll} className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white">
+              <button 
+                onClick={toggleSelectAll} 
+                className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white"
+              >
                 {isPageFullySelected ? 'None' : 'All'}
               </button>
-              <button onClick={handleBulkDelete} disabled={selectedIds.length === 0} className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition ${selectedIds.length > 0 ? 'bg-red-500 hover:bg-red-600' : 'bg-zinc-200 cursor-not-allowed'}`}>
+              
+              <button 
+                onClick={handleBulkDelete} 
+                disabled={selectedIds.length === 0 || !isAuthenticated} 
+                title={!isAuthenticated ? "Login required" : "Delete Selected"}
+                className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition 
+                  ${selectedIds.length > 0 && isAuthenticated 
+                    ? 'bg-red-500 hover:bg-red-600' 
+                    : 'bg-zinc-200 cursor-not-allowed'
+                  }`}
+              >
                 <FaTrash size={10} />
               </button>
             </>
           )}
         </div>
       </div>
+
     </div>
   )
 }
@@ -1447,7 +1453,7 @@ const CandidateCard = memo(({
               onClick={(e) => handleRetry(person, e)}
               title="Retry AI Parsing"
               disabled={isProcessing}
-              className={`hidden sm:block p-2 text-blue-400 hover:text-blue-600 bg-white border border-zinc-100 hover:border-blue-500 rounded transition-colors duration-200 ${isProcessing ? 'animate-pulse opacity-50 cursor-wait' : ''}`}
+              className={`p-2 text-blue-400 hover:text-blue-600 bg-white border border-zinc-100 hover:border-blue-500 rounded transition-colors duration-200 ${isProcessing ? 'animate-pulse opacity-50 cursor-wait' : ''}`}
             >
               <FaSync size={10} className={isProcessing ? "animate-spin" : ""} />
             </button>
@@ -1568,6 +1574,13 @@ const EditForm = ({
           <SolidInput label="Full Name" name="Name" val={editingCandidate.Name} onChange={handleEditChange} />
           <SolidInput label="Applying For" name="Position" val={editingCandidate.Position} onChange={handleEditChange} />
           <SolidInput label="Phone" name="Tel" val={editingCandidate.Tel} onChange={handleEditChange} />
+          <div>
+            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Birth Date <span className="text-[10px] font-normal text-zinc-400 normal-case ml-2 opacity-75">(MM-DD-YY)</span></label>
+            <div className="flex gap-2">
+              <input type="date" name="BirthDate" value={formatDateForInput(editingCandidate.BirthDate)} onChange={handleEditChange} className="flex-1 bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition" />
+              <button onClick={() => setEditingCandidate({ ...editingCandidate, Birth: "" })} className="px-3 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded text-xs font-bold text-zinc-600">Clear</button>
+            </div>
+          </div>
           <div className="col-span-1">
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Gender</label>
             <select name="Gender" value={editingCandidate.Gender || "N/A"} onChange={handleEditChange} className="w-full bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition h-[38px]">
@@ -1576,16 +1589,9 @@ const EditForm = ({
               <option value="Female">Female</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Birth Date <span className="text-[10px] font-normal text-zinc-400 normal-case ml-2 opacity-75">(MM-DD-YY)</span></label>
-            <div className="flex gap-2">
-              <input type="date" name="BirthDate" value={formatDateForInput(editingCandidate.BirthDate)} onChange={handleEditChange} className="flex-1 bg-white border border-zinc-300 p-2 text-sm font-semibold text-black focus:border-black focus:ring-1 focus:ring-black outline-none transition" />
-              <button onClick={() => setEditingCandidate({ ...editingCandidate, Birth: "" })} className="px-3 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded text-xs font-bold text-zinc-600">Clear</button>
-            </div>
-          </div>
           <SolidInput label="Address" name="Location" val={editingCandidate.Location} onChange={handleEditChange} />
-          <div className="col-span-1">
-            <SolidInput label="School" name="School" val={editingCandidate.School} onChange={handleEditChange} />
+          <div className="col-span-2">
+            <SolidInput label="Education" name="School" val={editingCandidate.School} onChange={handleEditChange} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Experience</label>
