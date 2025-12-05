@@ -154,7 +154,8 @@ function App() {
       const token = localStorage.getItem("cv_token");
       if (!token) return; // Not logged in
 
-      const res = await axios.get(`http://127.0.0.1:8000/users/me`, {
+      // Use the API_URL variable you defined earlier
+      const res = await axios.get(`${API_URL}/users/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCredits(res.data.current_credits);
@@ -1262,8 +1263,8 @@ const Navbar = ({
       <div className="flex items-center gap-2 lg:gap-3 shrink-0">
         {/* Install App Button - Hidden on mobile */}
         {deferredPrompt && (
-          <button 
-            onClick={handleInstallClick} 
+          <button
+            onClick={handleInstallClick}
             className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-50 transition"
           >
             <FaDownload size={10} /> Install App
@@ -1292,8 +1293,8 @@ const Navbar = ({
                   {showMenu && (
                     <>
                       {/* Backdrop to close menu */}
-                      <div 
-                        className="fixed inset-0 z-40" 
+                      <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setShowMenu(false)}
                       />
                       <motion.div
@@ -1350,7 +1351,7 @@ const Navbar = ({
                     onClick={() => setShowMobileMenu(false)}
                     className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
                   />
-                  
+
                   {/* Slide-out Panel */}
                   <motion.div
                     initial={{ x: '100%' }}
@@ -1436,8 +1437,8 @@ const Navbar = ({
             </AnimatePresence>
           </>
         ) : (
-          <button 
-            onClick={() => setShowLoginModal(true)} 
+          <button
+            onClick={() => setShowLoginModal(true)}
             className="px-3 lg:px-4 py-1.5 lg:py-2 bg-black text-white rounded text-[10px] lg:text-xs font-bold uppercase hover:bg-zinc-800 active:bg-zinc-900 transition"
           >
             Login
