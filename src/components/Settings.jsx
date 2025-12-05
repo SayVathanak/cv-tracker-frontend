@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import QRCode from "react-qr-code";
+import axios from 'axios';
 import { motion } from 'framer-motion'
 import {
     FaUserShield, FaFileExcel, FaCloudUploadAlt,
@@ -18,6 +20,88 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
         },
         autoTags: ""
     });
+
+    // --- PAYMENT STATES ---
+    const [credits, setCredits] = useState(0);
+    const [qrData, setQrData] = useState(null);
+    const [checkInterval, setCheckInterval] = useState(null);
+    const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+    const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const currentUserEmail = initialSettings.profile?.username;
+
+    // 1. Fetch Credits (FIXED)
+    useEffect(() => {
+        if (activeTab === 'billing') {
+            fetchUserCredits();
+        }
+    }, [activeTab]);
+
+    const fetchUserCredits = async () => {
+        try {
+            // Get Token from LocalStorage (Assuming you saved it there during login)
+            const token = localStorage.getItem("cv_token");
+
+            const res = await axios.get(`${API_URL}/users/me`, {
+                headers: { Authorization: `Bearer ${token}` } // <--- CRITICAL: Send Token
+            });
+            setCredits(res.data.current_credits); // Update State
+        } catch (e) {
+            console.error("Failed to fetch credits:", e);
+        }
+    };
+
+    // 2. Buy Button (FIXED)
+    const handleBuy = async (packageId) => {
+        try {
+            // Note: Ensure your Backend expects JSON body now (as discussed before)
+            const res = await axios.post(`${API_URL}/api/create-payment`, {
+                package_id: packageId,
+                email: currentUserEmail
+            });
+
+            setQrData(res.data);
+            setPaymentSuccess(false);
+            startPolling(res.data.md5); // Start the loop
+        } catch (error) {
+            console.error("Payment Error", error);
+            alert("Could not generate QR code. Check console.");
+        }
+    };
+
+    // 3. Polling Logic (CLEANED UP - Removed the duplicate useEffect)
+    const startPolling = (md5) => {
+        if (checkInterval) clearInterval(checkInterval);
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await axios.post(`${API_URL}/api/check-payment-status`, null, {
+                    params: { md5_hash: md5 }
+                });
+
+                if (res.data.status === "PAID") {
+                    clearInterval(interval);
+                    
+                    // --- ADD THESE 2 LINES ---
+                    setQrData(null);          // <--- This closes the QR Modal
+                    setPaymentSuccess(true);  // <--- This stops the loading state
+                    // -------------------------
+
+                    alert("Payment Successful!");
+                    onPaymentSuccess(); 
+                }
+            } catch (e) {
+                // waiting...
+            }
+        }, 3000);
+
+        setCheckInterval(interval);
+    };
+
+    // Clean up interval on close
+    useEffect(() => {
+        return () => { if (checkInterval) clearInterval(checkInterval); }
+    }, [checkInterval]);
 
     // Toggle Handler
     const handleToggleField = (field) => {
@@ -216,56 +300,63 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
                         {/* --- TAB: BILLING (Visual Only) --- */}
                         {activeTab === 'billing' && (
                             <div className="space-y-8 max-w-lg">
-                                {/* Credit Card Box */}
+
+                                {/* CREDIT BALANCE CARD */}
                                 <div className="bg-linear-to-br from-zinc-900 to-zinc-800 text-white p-6 rounded-xl shadow-xl relative overflow-hidden border border-zinc-700">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                        <FaCreditCard size={120} />
-                                    </div>
                                     <div className="relative z-10">
-                                        <h4 className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Current Plan</h4>
-                                        <div className="text-2xl font-bold mb-6">Free Starter</div>
-
-                                        <div className="flex justify-between items-end">
-                                            <div>
-                                                <div className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Monthly Credits</div>
-                                                <div className="text-sm font-bold">125 / 500 Used</div>
-                                            </div>
-                                            <button className="bg-white text-black px-3 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-zinc-200 transition">
-                                                Upgrade
-                                            </button>
-                                        </div>
-                                        {/* Progress Bar */}
-                                        <div className="w-full bg-zinc-700 h-1.5 rounded-full overflow-hidden mt-3">
-                                            <div className="bg-green-400 h-full w-[25%] shadow-[0_0_10px_rgba(74,222,128,0.5)]"></div>
-                                        </div>
+                                        <h4 className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Available Credits</h4>
+                                        <div className="text-4xl font-bold mb-4">{credits || 0}</div>
+                                        <div className="text-xs opacity-70">1 Credit = 1 CV Parsing</div>
                                     </div>
                                 </div>
 
-                                {/* History Table */}
-                                <div>
-                                    <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
-                                        Billing History
-                                    </label>
-                                    <table className="w-full text-sm text-left border-collapse">
-                                        <thead className="text-[10px] text-zinc-400 uppercase border-b border-zinc-100">
-                                            <tr>
-                                                <th className="py-2 font-bold">Date</th>
-                                                <th className="py-2 font-bold">Item</th>
-                                                <th className="py-2 font-bold text-right">Amount</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-zinc-600 text-xs">
-                                            <tr className="border-b border-zinc-50 hover:bg-zinc-50">
-                                                <td className="py-3">Oct 01, 2023</td>
-                                                <td>Starter Plan (Free)</td>
-                                                <td className="text-right font-bold text-black">$0.00</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
+                                {/* QR CODE MODAL (Overlay) */}
+                                {qrData && !paymentSuccess && (
+                                    <div className="p-4 border-2 border-blue-500 bg-blue-50 rounded-xl flex flex-col items-center text-center">
+                                        <h3 className="font-bold text-lg mb-2 text-blue-900">Scan with ABA / Bakong</h3>
+                                        <div className="bg-white p-2 rounded shadow-sm mb-3">
+                                            <QRCode value={qrData.qr_code} size={180} />
+                                        </div>
+                                        <p className="text-xl font-bold text-black">${qrData.amount} USD</p>
+                                        <div className="flex items-center gap-2 mt-2 text-xs font-bold text-blue-600 animate-pulse">
+                                            <FaCreditCard /> Waiting for payment...
+                                        </div>
+                                        <button
+                                            onClick={() => { setQrData(null); clearInterval(checkInterval); }}
+                                            className="mt-4 text-xs underline text-zinc-500"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* PRICING OPTIONS */}
+                                {!qrData && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Option 1 */}
+                                        <button
+                                            onClick={() => handleBuy('small')}
+                                            className="p-4 border border-zinc-200 rounded-xl hover:border-black hover:shadow-md transition text-left group"
+                                        >
+                                            <div className="text-xs font-bold text-zinc-400 uppercase">Starter Pack</div>
+                                            <div className="text-2xl font-bold text-black mt-1">$1.00</div>
+                                            <div className="text-sm font-medium text-green-600 mt-1">20 Credits</div>
+                                        </button>
+
+                                        {/* Option 2 */}
+                                        <button
+                                            onClick={() => handleBuy('pro')}
+                                            className="p-4 border border-zinc-200 rounded-xl hover:border-black hover:shadow-md transition text-left group relative overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 right-0 bg-black text-white text-[9px] font-bold px-2 py-1 rounded-bl">POPULAR</div>
+                                            <div className="text-xs font-bold text-zinc-400 uppercase">Pro Pack</div>
+                                            <div className="text-2xl font-bold text-black mt-1">$5.00</div>
+                                            <div className="text-sm font-medium text-green-600 mt-1">150 Credits</div>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
-
                     </div>
                 </div>
             </motion.div>

@@ -3,7 +3,7 @@ import axios from 'axios'
 import * as XLSX from 'xlsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { GoogleOAuthProvider, GoogleLogin, useGoogleLogin } from '@react-oauth/google';
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import Swal from 'sweetalert2'
@@ -11,6 +11,7 @@ import withReactContent from 'sweetalert2-react-content'
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import SettingsPage from './components/Settings'
+import CreditBadge from './components/CreditBadge'
 
 import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel,
@@ -22,6 +23,7 @@ import {
   FaChartLine, FaChevronDown, FaCog, FaEye, FaEyeSlash
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
+import { FcGoogle } from "react-icons/fc";
 
 // pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
@@ -143,6 +145,25 @@ function App() {
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 
   useEffect(() => { fetchCandidates(1) }, [])
+
+  const [credits, setCredits] = useState(0);
+
+  // 1. Fetch credits here (so Navbar can show it immediately)
+  const fetchCredits = async () => {
+    try {
+      const token = localStorage.getItem("cv_token");
+      if (!token) return; // Not logged in
+
+      const res = await axios.get(`http://127.0.0.1:8000/users/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCredits(res.data.current_credits);
+    } catch (e) { console.error(e); }
+  };
+
+  useEffect(() => {
+    fetchCredits();
+  }, []);
 
   // --- INIT AUTH ---
   useEffect(() => {
@@ -481,6 +502,8 @@ function App() {
       // 4. Server Responded
       setUploadProgress(100)
       setStatus("Finalizing...")
+
+      fetchCredits();
 
       // --- CALCULATE ESTIMATED TIME ---
       const count = res.data.details.length
@@ -918,6 +941,7 @@ function App() {
         handleLogout={handleLogout}
         onOpenSettings={() => setShowSettings(true)}
         autoDeleteEnabled={appSettings.autoDelete}
+        credits={credits}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
@@ -1144,6 +1168,8 @@ function App() {
             onClose={() => setShowSettings(false)}
             initialSettings={appSettings} // Pass current settings
             onSave={saveSettings}         // Pass save handler
+            onPaymentSuccess={() => fetchCredits()}
+            currentCredits={credits}
           />
         )}
       </AnimatePresence>
@@ -1190,12 +1216,12 @@ const Navbar = ({
   handleLogout,
   currentUser,
   onOpenSettings,
-  autoDeleteEnabled
+  autoDeleteEnabled,
+  credits
 }) => {
 
   const [showMenu, setShowMenu] = useState(false)
   const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?";
-
 
   return (
     <nav className="flex-none h-14 px-4 border-b border-zinc-100 bg-white flex items-center justify-between z-50 sticky top-0 select-none">
@@ -1206,7 +1232,7 @@ const Navbar = ({
           src="/logo.svg"
           alt="App Logo"
           className="w-8 h-8 object-contain"
-          onError={(e) => { e.target.style.display = 'none' }} // Fallback if no logo
+          onError={(e) => { e.target.style.display = 'none' }}
         />
 
         <div className="flex flex-col justify-center">
@@ -1215,7 +1241,6 @@ const Navbar = ({
               Welcome Back,
             </span>
 
-            {/* DYNAMIC AUTO-DELETE INDICATOR */}
             {isAuthenticated && autoDeleteEnabled && (
               <div
                 className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide cursor-help"
@@ -1241,51 +1266,60 @@ const Navbar = ({
         )}
 
         {isAuthenticated ? (
-          <div className="relative ml-2">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center gap-1 outline-none group"
-            >
-              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
-                {userInitial}
-              </div>
-              <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
-            </button>
+          <div className="flex items-center gap-3 ml-2">
+            
+            {/* 1. CREDIT BADGE (Separated) */}
+            <CreditBadge
+              credits={credits}
+              onClick={onOpenSettings}
+            />
 
-            {/* DROPDOWN MENU */}
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 5, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                  transition={{ duration: 0.1 }}
-                  className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50 py-1"
-                >
-                  <div className="px-4 py-2 border-b border-zinc-50">
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
-                    <p className="text-xs font-bold text-black truncate">{currentUser}</p>
-                  </div>
+            {/* 2. AVATAR + MENU (Grouped in their own relative container) */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center gap-1 outline-none group"
+              >
+                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
+                  {userInitial}
+                </div>
+                <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
+              </button>
 
-                  {/* SETTINGS BUTTON */}
-                  <button
-                    onClick={() => { setShowMenu(false); onOpenSettings(); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
+              {/* DROPDOWN MENU */}
+              <AnimatePresence>
+                {showMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                    transition={{ duration: 0.1 }}
+                    className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50 py-1"
                   >
-                    <FaCog className="text-zinc-400" /> Settings
-                  </button>
+                    <div className="px-4 py-2 border-b border-zinc-50">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
+                      <p className="text-xs font-bold text-black truncate">{currentUser}</p>
+                    </div>
 
-                  <div className="h-px bg-zinc-100 my-1"></div>
+                    <button
+                      onClick={() => { setShowMenu(false); onOpenSettings(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
+                    >
+                      <FaCog className="text-zinc-400" /> Settings
+                    </button>
 
-                  <button
-                    onClick={() => { setShowMenu(false); handleLogout(); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left"
-                  >
-                    <FaSignOutAlt /> Sign Out
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                    <div className="h-px bg-zinc-100 my-1"></div>
+
+                    <button
+                      onClick={() => { setShowMenu(false); handleLogout(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left"
+                    >
+                      <FaSignOutAlt /> Sign Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         ) : (
           <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">
@@ -2218,193 +2252,62 @@ const SolidInput = ({ label, name, val, onChange, type = "text" }) => (
   </div>
 )
 
-// ==================== "AURA" STYLE LOGIN MODAL ====================
+// ==================== UPDATED LOGIN MODAL ====================
 const LoginModal = ({ onClose, onSuccess, API_URL }) => {
   const [isRegistering, setIsRegistering] = useState(false)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false) // New state for toggle
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [successMsg, setSuccessMsg] = useState("")
 
-  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  // 1. Setup Custom Google Hook
+  const loginToGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true); setError("")
+      try {
+        // We send the access_token to your backend
+        const res = await axios.post(`${API_URL}/auth/google`, {
+          token: tokenResponse.access_token
+        });
+        onSuccess(res.data.access_token, res.data.username);
+      } catch (err) {
+        setError("Google Sign-In failed.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => setError("Google Sign-In Failed"),
+  });
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true); setError(""); setSuccessMsg("")
-
-    try {
-      if (isRegistering) {
-        await axios.post(`${API_URL}/register`, { username, password })
-        setSuccessMsg("Account created! Please log in.")
-        setIsRegistering(false); setPassword("")
-      } else {
-        const formData = new FormData()
-        formData.append('username', username)
-        formData.append('password', password)
-        const res = await axios.post(`${API_URL}/token`, formData)
-        onSuccess(res.data.access_token, username)
-      }
-    } catch (err) {
-      if (isRegistering) setError(err.response?.data?.detail || "Registration failed.")
-      else setError("Invalid username or password")
-    } finally {
-      setLoading(false)
-    }
+    // ... (Keep your existing handleSubmit logic here) ...
+    // Copy/paste the handleSubmit from your previous file
   }
 
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setLoading(true); setError("")
-    try {
-      const res = await axios.post(`${API_URL}/auth/google`, {
-        token: credentialResponse.credential
-      });
-      onSuccess(res.data.access_token, res.data.username);
-    } catch (err) {
-      setError("Google Sign-In failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-zinc-100/60 backdrop-blur-md select-none">
+    // Make sure your GoogleOAuthProvider wraps this or is at the App root
+    <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-zinc-100/60 backdrop-blur-md select-none">
+      {/* ... (Keep your existing Modal UI structure) ... */}
+      <div className="bg-white w-full max-w-[420px] rounded-3xl p-8 relative shadow-2xl">
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white w-full max-w-[420px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] overflow-hidden relative border border-white"
-        >
+        {/* ... Logo & Title ... */}
 
-          {/* --- TOP GLOW EFFECT --- */}
-          <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-40 h-40 bg-green-500/10 blur-[60px] rounded-full pointer-events-none"></div>
-
-          {/* Close Button */}
-          <button onClick={onClose} className="absolute top-5 right-5 text-zinc-400 hover:text-black transition z-10">
-            <BsXLg size={14} />
+        {/* --- 2. CUSTOM GOOGLE BUTTON (With Khmer Font) --- */}
+        <div className="flex justify-center mb-6">
+          <button
+            onClick={() => loginToGoogle()}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300 text-zinc-700 font-bold py-3 px-4 rounded-full transition-all shadow-sm group"
+          >
+            <FcGoogle size={22} />
+            {/* APPLY YOUR FONT HERE */}
+            <span className="font-kantumruy text-sm pt-0.5">
+              បន្តជាមួយ Google
+            </span>
           </button>
+        </div>
 
-          <div className="p-8 relative z-0">
-
-            {/* --- HEADER --- */}
-            <div className="text-center mb-8">
-
-              <img
-                src="/logo.svg"
-                alt="Logo"
-                className="w-12 h-12 mx-auto mb-4 object-contain drop-shadow-md"
-              />
-
-              <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">
-                {isRegistering ? "Create Account" : "Welcome back"}
-              </h2>
-              <p className="text-zinc-500 text-sm mt-1">
-                {isRegistering ? "Please enter details to sign up" : "Please enter your details to sign in"}
-              </p>
-            </div>
-
-            {/* --- GOOGLE LOGIN --- */}
-            <div className="flex justify-center mb-6">
-              <div className="w-full flex justify-center">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={() => setError("Google Sign-In Failed")}
-                  theme="outline"
-                  size="large"
-                  shape="pill"
-                  width="350"
-                  text="continue_with"
-                />
-              </div>
-            </div>
-
-            {/* --- DIVIDER --- */}
-            <div className="relative flex py-1 items-center mb-6">
-              <div className="grow border-t border-zinc-100"></div>
-              <span className="shrink-0 mx-3 text-[10px] font-bold text-zinc-300 uppercase tracking-widest">OR</span>
-              <div className="grow border-t border-zinc-100"></div>
-            </div>
-
-            {/* --- FORM --- */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-
-              {/* Username Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-700 ml-1">Username or Email</label>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  className="w-full bg-white border border-zinc-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-300 hover:border-zinc-300"
-                  placeholder="Enter your username"
-                  required
-                />
-              </div>
-
-              {/* Password Input with Eye Toggle */}
-              <div className="space-y-1.5 relative">
-                <label className="text-xs font-semibold text-zinc-700 ml-1">Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className="w-full bg-white border border-zinc-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-300 hover:border-zinc-300 pr-10"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3.5 text-zinc-400 hover:text-black transition"
-                  >
-                    {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Extra Options (Visual Only) */}
-              {!isRegistering && (
-                <div className="flex justify-between items-center text-xs mt-2 px-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-zinc-500 hover:text-zinc-800 transition">
-                    <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
-                    Remember me
-                  </label>
-                  <button type="button" className="font-semibold text-zinc-900 hover:underline">Forgot password?</button>
-                </div>
-              )}
-
-              {/* Errors/Success */}
-              {error && <p className="text-red-500 text-xs font-bold text-center mt-2">{error}</p>}
-              {successMsg && <p className="text-green-600 text-xs font-bold text-center mt-2">{successMsg}</p>}
-
-              {/* Main Button */}
-              <button
-                disabled={loading}
-                className="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-xl text-sm tracking-wide hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.99] transition-all duration-200 mt-2"
-              >
-                {loading ? <FaSpinner className="animate-spin mx-auto" /> : (isRegistering ? "Create account" : "Sign in")}
-              </button>
-            </form>
-
-            {/* Footer */}
-            <div className="mt-8 text-center text-sm text-zinc-500">
-              {isRegistering ? "Already have an account?" : "Don't have an account?"}
-              <button
-                onClick={() => { setIsRegistering(!isRegistering); setError(""); setSuccessMsg(""); }}
-                className="ml-1.5 font-bold text-zinc-900 hover:underline"
-              >
-                {isRegistering ? "Sign in" : "Sign up"}
-              </button>
-            </div>
-
-          </div>
-        </motion.div>
+        {/* ... (Rest of your form: Username, Password, Buttons) ... */}
       </div>
-    </GoogleOAuthProvider>
+    </div>
   )
 }
