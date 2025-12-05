@@ -682,13 +682,30 @@ function App() {
     Toast.fire({ icon: 'success', title: 'Success', text: `Exported ${finalData.length} records.` })
   }
 
+  // --- OPTIMISTIC TOGGLE LOCK (No Refresh) ---
   const toggleLock = useCallback(async (person, e) => {
     e.stopPropagation()
+
+    // 1. Update UI Immediately (Flip the lock status locally)
+    setCandidates(prevList => prevList.map(c =>
+      c._id === person._id ? { ...c, locked: !c.locked } : c
+    ))
+
     try {
+      // 2. Send request silently to server
       await axios.put(`${API_URL}/candidates/${person._id}/lock`, { locked: !person.locked })
-      fetchCandidates(currentPage) // <--- Pass currentPage here
-    } catch (error) { alert("Failed") }
-  }, [currentPage]) // Add currentPage to dependency array
+
+      // DO NOT call fetchCandidates() here! 
+      // We already updated the UI in step 1.
+
+    } catch (error) {
+      // 3. Revert if server fails (Safety net)
+      setCandidates(prevList => prevList.map(c =>
+        c._id === person._id ? { ...c, locked: person.locked } : c
+      ))
+      Toast.fire({ icon: 'error', title: 'Lock failed', text: 'Reverting change...' })
+    }
+  }, [])
 
   const startEditing = useCallback((person, e) => {
     e.stopPropagation()
@@ -806,13 +823,6 @@ function App() {
           ${showMobilePreview ? 'hidden lg:flex' : 'flex'}
         `}>
           {/* <StatsPanel stats={stats} loading={loading} /> */}
-          {/* <DashboardPanel candidates={candidates} loading={loading} /> */}
-          {/* <WelcomePanel
-            candidates={candidates}
-            loading={loading}
-            currentUser={currentUser}
-            totalItems={totalItems}
-          /> */}
           <StatusBar loading={loading} totalItems={totalItems} />
           <ControlPanel
             files={files}
@@ -919,37 +929,60 @@ function App() {
         <div className={`flex-1 bg-zinc-100 relative flex flex-col h-full overflow-hidden
             ${showMobilePreview ? 'fixed inset-0 z-50 bg-white' : 'hidden lg:flex'}
         `}>
-          <PDFViewer
-            previewUrl={previewUrl}
-            fileType={fileType}
-            zoom={zoom}
-            setZoom={setZoom}
-            showMobilePreview={showMobilePreview}
-            setShowMobilePreview={setShowMobilePreview}
-            editingCandidate={editingCandidate}
-            onClear={handleClearPreview}
-          />
-          {/* DESKTOP SPLIT EDIT */}
+
+          {/* 1. DASHBOARD LAYER (Always visible in background) */}
+          <div className="absolute inset-0 z-0">
+            <DashboardPanel stats={stats} candidates={candidates} />
+          </div>
+
+          {/* 2. PREVIEW / EDIT LAYER (Slides in on top) */}
           <AnimatePresence>
-            {editingCandidate && (
+            {(previewUrl || editingCandidate) && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "50%", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
+                initial={{ x: "100%", opacity: 1 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: "100%", opacity: 1 }}
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                className="hidden lg:flex bg-white border-t-4 border-black flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-20"
+                className="absolute inset-0 z-10 bg-zinc-100 flex flex-col shadow-[-20px_0_50px_rgba(0,0,0,0.1)]"
               >
-                <EditForm
-                  editingCandidate={editingCandidate}
-                  setEditingCandidate={setEditingCandidate}
-                  saveEdit={saveEdit}
-                  handleEditChange={handleEditChange}
-                  formatDateForInput={formatDateForInput}
-                />
+
+                {/* PDF VIEWER */}
+                <div className={`flex-1 flex flex-col overflow-hidden ${editingCandidate ? 'h-1/2' : 'h-full'}`}>
+                  <PDFViewer
+                    previewUrl={previewUrl}
+                    fileType={fileType}
+                    zoom={zoom}
+                    setZoom={setZoom}
+                    showMobilePreview={showMobilePreview}
+                    setShowMobilePreview={setShowMobilePreview}
+                    editingCandidate={editingCandidate}
+                    onClear={handleClearPreview}
+                  />
+                </div>
+
+                {/* EDIT FORM (Slides Up Inside the Slide-In Panel) */}
+                {editingCandidate && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: "50%" }}
+                    exit={{ height: 0 }}
+                    className="bg-white border-t-4 border-black flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-20"
+                  >
+                    <EditForm
+                      editingCandidate={editingCandidate}
+                      setEditingCandidate={setEditingCandidate}
+                      saveEdit={saveEdit}
+                      handleEditChange={handleEditChange}
+                      formatDateForInput={formatDateForInput}
+                    />
+                  </motion.div>
+                )}
+
               </motion.div>
             )}
           </AnimatePresence>
-          {/* MOBILE ACTION BAR */}
+
+          {/* MOBILE ACTION BAR (Keep existing logic) */}
           {showMobilePreview && selectedPerson && !editingCandidate && (
             <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-zinc-200 p-4 shadow-[0_-5px_30px_rgba(0,0,0,0.1)] z-50 lg:hidden">
               <div className="flex gap-2">
@@ -1179,17 +1212,26 @@ const ControlPanel = ({
   isUploading, uploadProgress, isAuthenticated, handleExport
 }) => {
 
-  // Logic to check if all items on the current page are selected
+  // Check if all visible items are selected
   const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
   const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+
+  // Helper to determine Copy behavior
+  const isSelectionActive = selectedIds.length > 0;
+
+  const onCopyClick = () => {
+    if (isSelectionActive) {
+      handleBulkCopy('selected'); // Copy only selected
+    } else {
+      handleBulkCopy('all');      // Copy everything
+    }
+  };
 
   return (
     <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
 
-      {/* 1. TOP ROW: UPLOAD & EXPORT TOOLS */}
+      {/* 1. TOP ROW: UPLOAD & EXPORT */}
       <div className="flex gap-2 h-8">
-
-        {/* A. File Input (The big button) */}
         <div className="relative flex-1 h-full">
           <input
             id="fileInput"
@@ -1214,71 +1256,45 @@ const ControlPanel = ({
           </label>
         </div>
 
-        {/* B. Upload Actions (Visible only when files are selected) */}
         {files.length > 0 && !isUploading && (
           <>
-            <button
-              onClick={handleUpload}
-              className="px-4 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition"
-            >
-              Start
-            </button>
-            <button
-              onClick={handleClearFiles}
-              className="px-3 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"
-            >
-              <FaTrash size={12} />
-            </button>
+            <button onClick={handleUpload} className="px-4 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition">Start</button>
+            <button onClick={handleClearFiles} className="px-3 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"><FaTrash size={12} /></button>
           </>
         )}
 
-        {/* C. Export Button (Always visible for quick access) */}
         <button
           onClick={handleExport}
-          title={selectedIds.length > 0 ? `Export ${selectedIds.length} Selected` : "Export All"}
+          title={isSelectionActive ? `Export ${selectedIds.length} Selected` : "Export All"}
           className={`px-3 h-full border rounded transition flex items-center justify-center gap-2
-            ${selectedIds.length > 0
-              ? 'bg-white text-black border-zinc-100'  // Active Style (Black)
-              : 'bg-white border-zinc-200 text-green-700 hover:border-black' // Default Style (White)
+            ${isSelectionActive
+              ? 'bg-white text-black border-zinc-100'
+              : 'bg-white border-zinc-200 text-green-700 hover:border-black'
             }`}
         >
           <FaFileExcel className='text-green-700' size={14} />
-          {selectedIds.length > 0 && (
-            <span className="text-xs font-medium">({selectedIds.length})</span>
-          )}
+          {isSelectionActive && <span className="text-xs font-medium">({selectedIds.length})</span>}
         </button>
       </div>
 
-      {/* 2. PROGRESS BAR (Animated) */}
+      {/* 2. PROGRESS BAR */}
       <AnimatePresence>
         {isUploading && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">
-                  {uploadProgress < 90 ? 'Uploading...' : 'Finalizing...'}
-                </span>
+                <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{uploadProgress < 90 ? 'Uploading...' : 'Finalizing...'}</span>
                 <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${uploadProgress}%` }}
-                  transition={{ ease: "easeOut", duration: 0.3 }}
-                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}
-                />
+                <motion.div initial={{ width: 0 }} animate={{ width: `${uploadProgress}%` }} transition={{ ease: "easeOut", duration: 0.3 }} className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`} />
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 3. SEARCH & SORT BAR */}
+      {/* 3. SEARCH */}
       <div className="relative">
         <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
         <input
@@ -1299,31 +1315,35 @@ const ControlPanel = ({
         </select>
       </div>
 
-      {/* 4. BOTTOM ACTION ROW (Select & Bulk Operations) */}
+      {/* 4. BOTTOM ACTION ROW (Dynamic Copy Button) */}
       <div className='grid grid-cols-2 gap-2 pt-1'>
 
-        {/* Copy All Button */}
+        {/* DYNAMIC COPY BUTTON */}
         <button
-          onClick={handleBulkCopy}
-          className="w-full h-8 bg-white text-black border border-zinc-300 rounded text-xs font-bold uppercase hover:bg-zinc-50 transition flex items-center justify-center gap-1.5">
-          <FaCopy size={10} /> Copy All
+          onClick={onCopyClick}
+          className={`w-full h-8 rounded text-xs font-bold uppercase transition flex items-center justify-center gap-1.5 border
+            ${isSelectionActive
+              ? 'bg-black text-white border-black hover:bg-zinc-800'  // Active State
+              : 'bg-white text-black border-zinc-300 hover:bg-zinc-50' // Default State
+            }`}
+        >
+          <FaCopy size={10} />
+          {isSelectionActive ? `Copy (${selectedIds.length})` : 'Copy All'}
         </button>
 
-        {/* Selection Tools */}
+        {/* SELECTION TOOLS */}
         <div className="flex gap-1.5">
-          {/* Toggle Select Mode */}
           <button
             onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
             className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1 
               ${selectMode
                 ? 'w-8 bg-red-50 text-red-600 border-red-200'
-                : 'flex-1 bg-black text-white border-black hover:bg-zinc-800'
+                : 'flex-1 bg-white text-black border-black hover:bg-zinc-50'
               }`}
           >
             {selectMode ? <FaTimes size={12} /> : 'Select'}
           </button>
 
-          {/* Active Selection Buttons */}
           {selectMode && (
             <>
               <button
@@ -1335,10 +1355,10 @@ const ControlPanel = ({
 
               <button
                 onClick={handleBulkDelete}
-                disabled={selectedIds.length === 0 || !isAuthenticated}
+                disabled={!isSelectionActive || !isAuthenticated}
                 title={!isAuthenticated ? "Login required" : "Delete Selected"}
                 className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition 
-                  ${selectedIds.length > 0 && isAuthenticated
+                  ${isSelectionActive && isAuthenticated
                     ? 'bg-red-500 hover:bg-red-600'
                     : 'bg-zinc-200 cursor-not-allowed'
                   }`}
@@ -1508,6 +1528,208 @@ const CandidateCard = memo(({
     </div>
   );
 });
+
+// ==================== COMPACT DASHBOARD PANEL ====================
+// ==================== DASHBOARD PANEL (WITH SEARCH & POSITIONS) ====================
+const DashboardPanel = ({ stats, candidates }) => {
+
+  const [filter, setFilter] = useState("");
+
+  // 1. FILTER LOGIC: Filter the raw data first
+  const filteredData = candidates.filter(c => {
+    if (!filter) return true;
+    const searchStr = filter.toLowerCase();
+    return (
+      (c.Name && c.Name.toLowerCase().includes(searchStr)) ||
+      (c.Position && c.Position.toLowerCase().includes(searchStr)) ||
+      (c.School && c.School.toLowerCase().includes(searchStr)) ||
+      (c.Location && c.Location.toLowerCase().includes(searchStr))
+    );
+  });
+
+  // 2. DYNAMIC STATS: Recalculate based on filter
+  const activeTotal = filteredData.length;
+  const activeProcessing = filteredData.filter(c => c.status === "Processing").length;
+  const activeReady = activeTotal - activeProcessing;
+  // If no filter, use global 'selected' stat. If filtering, count selected in filtered set.
+  const activeSelected = filter
+    ? filteredData.filter(c => c.locked || (c.status === "Ready" && false)).length // Simplified for view
+    : stats.selected;
+
+  // 3. GENERATE LISTS (Top 3)
+  const getTopDistribution = (field) => {
+    if (!filteredData || filteredData.length === 0) return [];
+    const counts = {};
+    filteredData.forEach(c => {
+      let val = c[field] || "Unknown";
+      val = val.trim();
+      if (val.length < 2) val = "Unknown";
+      counts[val] = (counts[val] || 0) + 1;
+    });
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percent: Math.round((count / activeTotal) * 100)
+      }));
+  };
+
+  const topSchools = getTopDistribution("School");
+  const topLocations = getTopDistribution("Location");
+  const topPositions = getTopDistribution("Position"); // <--- ADDED BACK
+
+  return (
+    <div className="h-full w-full bg-white select-text overflow-hidden flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-6xl flex flex-col h-full max-h-[650px] justify-between">
+
+        {/* HEADER: Title + Search */}
+        <div className="flex flex-col md:flex-row justify-between items-end border-b border-zinc-100 pb-4 gap-4">
+          <div>
+            <h1 className="text-2xl font-light text-black tracking-tight">Analytics</h1>
+            <div className="h-0.5 w-8 bg-black mt-1"></div>
+          </div>
+
+          {/* DASHBOARD SEARCH BAR */}
+          <div className="relative w-full md:w-64 group">
+            <FaSearch className="absolute left-3 top-2.5 text-zinc-400 group-focus-within:text-black transition-colors" size={12} />
+            <input
+              type="text"
+              placeholder="Filter by Role, Location..."
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="w-full bg-zinc-50 border border-zinc-200 rounded pl-9 pr-3 py-1.5 text-xs text-black focus:border-black focus:ring-0 outline-none transition-all placeholder:text-zinc-400"
+            />
+          </div>
+        </div>
+
+        {/* STATS ROW (Updates with Filter) */}
+        <div className="grid grid-cols-4 gap-6 py-4">
+          <MinimalStat label={filter ? "Matches" : "Total"} value={activeTotal} />
+          <MinimalStat label="Positions" value={topPositions.length > 0 ? topPositions.length + "+" : "0"} />
+          <MinimalStat label="Processing" value={activeProcessing} />
+          <div className="hidden md:block">
+            <StatusDonut total={activeTotal} ready={activeReady} processing={activeProcessing} />
+          </div>
+        </div>
+
+        {/* LISTS ROW: 3 COLUMNS (Positions, Schools, Locations) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 border-t border-zinc-50 pt-6">
+
+          {/* COL 1: TOP POSITIONS (Requested) */}
+          <div>
+            <h3 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-3 pb-1 border-b border-zinc-50 flex items-center gap-2">
+              <FaBriefcase /> Top Roles
+            </h3>
+            <div className="space-y-3">
+              {topPositions.map((item, i) => (
+                <MinimalBar key={i} label={item.name} count={item.count} percent={item.percent} />
+              ))}
+              {topPositions.length === 0 && <EmptyMsg />}
+            </div>
+          </div>
+
+          {/* COL 2: TOP SCHOOLS */}
+          <div>
+            <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 pb-1 border-b border-zinc-50 flex items-center gap-2">
+              <FaUniversity /> Universities
+            </h3>
+            <div className="space-y-3">
+              {topSchools.map((item, i) => (
+                <MinimalBar key={i} label={item.name} count={item.count} percent={item.percent} />
+              ))}
+              {topSchools.length === 0 && <EmptyMsg />}
+            </div>
+          </div>
+
+          {/* COL 3: TOP LOCATIONS */}
+          <div>
+            <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3 pb-1 border-b border-zinc-50 flex items-center gap-2">
+              <FaMapMarkerAlt /> Locations
+            </h3>
+            <div className="space-y-3">
+              {topLocations.map((item, i) => (
+                <MinimalBar key={i} label={item.name} count={item.count} percent={item.percent} />
+              ))}
+              {topLocations.length === 0 && <EmptyMsg />}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const EmptyMsg = () => <p className="text-xs text-zinc-300 italic">No data found</p>;
+
+// ==================== COMPACT COMPONENTS ====================
+
+const MinimalStat = ({ label, value }) => (
+  <div className="flex flex-col">
+    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{label}</span>
+    <span className="text-4xl font-light text-black tracking-tighter leading-none">{value}</span>
+  </div>
+)
+
+const MinimalBar = ({ label, count, percent }) => (
+  <div className="group w-full">
+    <div className="flex justify-between items-baseline mb-1">
+      <span className="text-xs font-medium text-zinc-700 truncate w-[85%]" title={label}>{label}</span>
+      <span className="text-xs font-bold text-black">{count}</span>
+    </div>
+    <div className="h-px w-full bg-zinc-100">
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${percent}%` }}
+        transition={{ duration: 1.0, ease: "circOut" }}
+        className="h-full bg-black"
+      />
+    </div>
+  </div>
+)
+
+const StatusDonut = ({ total, ready, processing }) => {
+  if (total === 0) return null;
+
+  const radius = 18; // Smaller Radius
+  const circumference = 2 * Math.PI * radius;
+  const readyPercent = (ready / total) * 100;
+  const offset = circumference - (readyPercent / 100) * circumference;
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative w-10 h-10 transform -rotate-90">
+        <svg className="w-full h-full" viewBox="0 0 44 44">
+          <circle cx="22" cy="22" r={radius} stroke="#f4f4f5" strokeWidth="4" fill="transparent" />
+          <motion.circle
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: offset }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            cx="22" cy="22" r={radius}
+            stroke="black"
+            strokeWidth="4"
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <div className="flex flex-col justify-center text-[10px] leading-tight">
+        <div className="flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 bg-black rounded-full"></div>
+          <span className="font-bold text-zinc-600">Ready</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 bg-zinc-200 rounded-full"></div>
+          <span className="font-bold text-zinc-400">Processing</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ==================== PDF VIEWER (MEMOIZED) ====================
 const PDFViewer = memo(({
