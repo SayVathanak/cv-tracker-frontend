@@ -3,12 +3,14 @@ import axios from 'axios'
 import * as XLSX from 'xlsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import Swal from 'sweetalert2'
 import withReactContent from 'sweetalert2-react-content'
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import SettingsPage from './components/Settings'
 
 import {
   FaRobot, FaCloudUploadAlt, FaTrash, FaEdit, FaSave, FaFileExcel,
@@ -16,7 +18,8 @@ import {
   FaCopy, FaCheck, FaArrowLeft, FaFilePdf,
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
   FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt,
-  FaUserFriends, FaUniversity, FaGlobeAsia, FaBriefcase, FaUserClock, FaChartLine, FaChevronDown
+  FaUserFriends, FaUniversity, FaGlobeAsia, FaBriefcase, FaUserClock,
+  FaChartLine, FaChevronDown, FaCog, FaEye, FaEyeSlash
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 
@@ -74,6 +77,44 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [batchStats, setBatchStats] = useState({ total: 0, processed: 0, active: false });
+  const [filters, setFilters] = useState({ location: "", position: "", education: "", gender: "" });
+  const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState(() => {
+    const saved = localStorage.getItem('cv_app_settings');
+    const parsed = saved ? JSON.parse(saved) : {};
+
+    // Check if we have a current user logged in right now
+    const token = localStorage.getItem("cv_token");
+    let currentSystemUser = "Guest";
+    if (token) {
+      try {
+        // Decode token payload simply to get username
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        currentSystemUser = payload.sub;
+      } catch (e) { }
+    }
+
+    return {
+      autoDelete: parsed.autoDelete || false,
+      retention: parsed.retention || '30',
+      exportFields: parsed.exportFields || {
+        phone: true, dob: true, address: true,
+        gender: true, education: true, experience: true
+      },
+      autoTags: parsed.autoTags || "",
+
+      // --- PROFILE CONFIG ---
+      profile: {
+        // PREFER saved display name, otherwise null
+        displayName: parsed.profile?.displayName || "",
+        // ALWAYS use the real system username
+        username: currentSystemUser,
+        // PREFER saved org
+        org: parsed.profile?.org || "My Company"
+      }
+    };
+  });
 
   // Selection State
   const [selectedIds, setSelectedIds] = useState([])
@@ -110,12 +151,55 @@ function App() {
       setIsAuthenticated(true)
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 
-      // NEW: Recover username from token on reload
       const username = getUserFromToken(token)
       if (username) setCurrentUser(username)
+
+      // FIX: Only fetch candidates if we actually have a token
+      fetchCandidates(1)
     }
-    fetchCandidates(1)
+    // If no token, we do nothing. The list stays empty until they log in.
   }, [])
+
+  // 2. Compute Unique Locations/Positions for Dropdowns
+  const uniqueLocations = [...new Set(candidates.map(c => c.Location).filter(Boolean))];
+  const uniquePositions = [...new Set(candidates.map(c => c.Position).filter(Boolean))];
+
+  // 3. Update the `filteredData` logic
+  const finalCandidates = candidates.filter(c => {
+    if (filters.location && !c.Location.includes(filters.location)) return false;
+    if (filters.position && !c.Position.includes(filters.position)) return false;
+    if (filters.education && c.EducationLevel !== filters.education) return false;
+    if (searchTerm) {
+      // ... existing search logic
+    }
+    return true;
+  });
+
+  // --- SETTINGS SAVE HANDLER ---
+  const saveSettings = (newSettings) => {
+    setAppSettings(newSettings);
+    localStorage.setItem('cv_app_settings', JSON.stringify(newSettings));
+    // Assuming you have the MySwal/Toast mixin set up from before
+    const Toast = Swal.mixin({
+      toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true
+    });
+    Toast.fire({ icon: 'success', title: 'Settings Saved' });
+    setShowSettings(false);
+  };
+
+  const handleSettingChange = (key, value) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    // Optional: Save to LocalStorage or API
+  };
+
+  // 4. Verification/Highlight Feature (Simple "Find in Page")
+  const handleVerifyField = (text) => {
+    // Since we can't easily get coordinates from Gemini without complex OCR,
+    // we trigger the browser's native find or a custom text search.
+    // For this prototype, we copy to clipboard and notify user to Ctrl+F
+    navigator.clipboard.writeText(text);
+    Toast.fire({ icon: 'info', title: 'Copied to Clipboard', text: 'Press Ctrl+F to find in document' });
+  };
 
   // --- AUTH HANDLERS ---
   const handleLoginSuccess = (token, username) => {
@@ -253,18 +337,31 @@ function App() {
     topSchool: getMostFrequent(candidates, "School")
   }
 
-  const processedCandidates = candidates.sort((a, b) => {
-    if (sortOption === "nameAsc") return a.Name.localeCompare(b.Name)
-    if (sortOption === "nameDesc") return b.Name.localeCompare(a.Name)
-    if (sortOption === "schoolAsc") return a.School.localeCompare(b.School)
-    if (sortOption === "genderAsc") return (a.Gender || "z").localeCompare(b.Gender || "z")
-    if (sortOption === "genderDesc") return (b.Gender || "").localeCompare(a.Gender || "")
-    if (sortOption === "locationAsc") return (a.Location || "z").localeCompare(b.Location || "z")
-    if (sortOption === "locationDesc") return (b.Location || "").localeCompare(a.Location || "")
-    if (sortOption === "oldest") return a._id.localeCompare(b._id)
-    if (sortOption === "newest") return b._id.localeCompare(a._id)
-    return 0
-  })
+  // --- FILTERING & SORTING LOGIC ---
+  const processedCandidates = candidates
+    .filter(person => {
+      // 1. Text Search (Existing)
+      if (searchTerm) {
+        const lowerSearch = searchTerm.toLowerCase();
+        const matchesName = person.Name.toLowerCase().includes(lowerSearch);
+        const matchesTel = person.Tel.includes(searchTerm);
+        if (!matchesName && !matchesTel) return false;
+      }
+
+      // 2. Smart Filters (NEW)
+      if (filters.location && person.Location !== filters.location) return false;
+      if (filters.position && person.Position !== filters.position) return false;
+      if (filters.education && person.School !== filters.education) return false; // Or use EducationLevel if you standardized it
+      if (filters.gender && person.Gender !== filters.gender) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortOption === "nameAsc") return a.Name.localeCompare(b.Name)
+      if (sortOption === "scoreDesc") return (b.Confidence || 0) - (a.Confidence || 0)
+      if (sortOption === "newest") return b._id.localeCompare(a._id)
+      return 0
+    })
 
   const MySwal = withReactContent(Swal)
   const Toast = Swal.mixin({
@@ -387,7 +484,7 @@ function App() {
 
       // --- CALCULATE ESTIMATED TIME ---
       const count = res.data.details.length
-      const secondsPerCv = 30
+      const secondsPerCv = 15
       const totalSeconds = count * secondsPerCv
 
       let timeMsg = ""
@@ -544,25 +641,25 @@ function App() {
     // 3. If User says "Yes"
     if (result.isConfirmed) {
       try {
-        const response = await axios.post(`${API_URL}/candidates/bulk-delete`, { 
-          candidate_ids: selectedIds 
+        const response = await axios.post(`${API_URL}/candidates/bulk-delete`, {
+          candidate_ids: selectedIds
         });
 
         if (response.data.status === "success") {
           fetchCandidates();
           clearSelection();
-          
+
           // Match handleDelete Toast style
-          Toast.fire({ 
-            icon: 'success', 
-            title: 'Deleted', 
-            text: response.data.message 
+          Toast.fire({
+            icon: 'success',
+            title: 'Deleted',
+            text: response.data.message
           });
         } else {
-          Toast.fire({ 
-            icon: 'error', 
-            title: 'Error', 
-            text: response.data.message 
+          Toast.fire({
+            icon: 'error',
+            title: 'Error',
+            text: response.data.message
           });
         }
       } catch (error) {
@@ -811,10 +908,16 @@ function App() {
         selectMode={selectMode}
         deferredPrompt={deferredPrompt}
         handleInstallClick={handleInstallClick}
-        currentUser={currentUser}
+        currentUser={
+          (appSettings.profile?.displayName && appSettings.profile.displayName.trim() !== "")
+            ? appSettings.profile.displayName
+            : currentUser
+        }
         isAuthenticated={isAuthenticated}
         setShowLoginModal={setShowLoginModal}
         handleLogout={handleLogout}
+        onOpenSettings={() => setShowSettings(true)}
+        autoDeleteEnabled={appSettings.autoDelete}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
@@ -824,6 +927,11 @@ function App() {
         `}>
           {/* <StatsPanel stats={stats} loading={loading} /> */}
           <StatusBar loading={loading} totalItems={totalItems} />
+          {/* <SmartFilterBar
+            filters={filters}
+            setFilters={setFilters}
+            candidates={candidates}
+          /> */}
           <ControlPanel
             files={files}
             loading={loading}
@@ -849,6 +957,7 @@ function App() {
             isUploading={isUploading}
             uploadProgress={uploadProgress}
             isAuthenticated={isAuthenticated}
+            batchStats={batchStats}
           />
 
           {/* CANDIDATE LIST */}
@@ -1029,6 +1138,15 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {showSettings && (
+          <SettingsPage
+            onClose={() => setShowSettings(false)}
+            initialSettings={appSettings} // Pass current settings
+            onSave={saveSettings}         // Pass save handler
+          />
+        )}
+      </AnimatePresence>
       {showLoginModal && (
         <LoginModal
           onClose={() => setShowLoginModal(false)}
@@ -1065,28 +1183,52 @@ const SkeletonLoader = () => {
 
 // ==================== COMPACT NAVBAR ====================
 const Navbar = ({
-  deferredPrompt, handleInstallClick, isAuthenticated,
-  setShowLoginModal, handleLogout, currentUser
+  deferredPrompt,
+  handleInstallClick,
+  isAuthenticated,
+  setShowLoginModal,
+  handleLogout,
+  currentUser,
+  onOpenSettings,
+  autoDeleteEnabled
 }) => {
 
   const [showMenu, setShowMenu] = useState(false)
   const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?";
 
+
   return (
     <nav className="flex-none h-14 px-4 border-b border-zinc-100 bg-white flex items-center justify-between z-50 sticky top-0 select-none">
 
-      {/* LEFT: LOGO + STACKED GREETING */}
+      {/* LEFT: LOGO + GREETING */}
       <div className="flex items-center gap-3">
-
         <img
           src="/logo.svg"
           alt="App Logo"
           className="w-8 h-8 object-contain"
+          onError={(e) => { e.target.style.display = 'none' }} // Fallback if no logo
         />
 
         <div className="flex flex-col justify-center">
-          <span className="text-xs font-medium text-zinc-400 leading-none mb-0.5">Welcome Back,</span>
-          <span className="text-xl font-bold text-black tracking-tight leading-none">{currentUser || "Guest"}.</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400 leading-none mb-0.5">
+              Welcome Back,
+            </span>
+
+            {/* DYNAMIC AUTO-DELETE INDICATOR */}
+            {isAuthenticated && autoDeleteEnabled && (
+              <div
+                className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide cursor-help"
+                title="Auto-Delete is Enabled (24h)"
+              >
+                <FaUserShield size={9} />
+                <span>Auto-Delete On</span>
+              </div>
+            )}
+          </div>
+          <span className="text-xl font-bold text-black tracking-tight leading-none">
+            {currentUser || "Guest"}.
+          </span>
         </div>
       </div>
 
@@ -1094,28 +1236,61 @@ const Navbar = ({
       <div className="flex items-center gap-2">
         {deferredPrompt && (
           <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-3 py-1.5 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-50 transition">
-            <FaDownload size={10} /> App
+            <FaDownload size={10} /> Install App
           </button>
         )}
 
         {isAuthenticated ? (
           <div className="relative ml-2">
-            <button onClick={() => setShowMenu(!showMenu)} onBlur={() => setTimeout(() => setShowMenu(false), 200)} className="flex items-center gap-1 outline-none group">
-              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 transition">{userInitial}</div>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="flex items-center gap-1 outline-none group"
+            >
+              <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
+                {userInitial}
+              </div>
               <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
             </button>
+
+            {/* DROPDOWN MENU */}
             <AnimatePresence>
               {showMenu && (
-                <motion.div initial={{ opacity: 0, y: 5, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 5, scale: 0.95 }} transition={{ duration: 0.1 }} className="absolute right-0 top-10 w-40 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50">
-                  <div className="p-1">
-                    <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-md transition text-left"><FaSignOutAlt /> Sign Out</button>
+                <motion.div
+                  initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50 py-1"
+                >
+                  <div className="px-4 py-2 border-b border-zinc-50">
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
+                    <p className="text-xs font-bold text-black truncate">{currentUser}</p>
                   </div>
+
+                  {/* SETTINGS BUTTON */}
+                  <button
+                    onClick={() => { setShowMenu(false); onOpenSettings(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
+                  >
+                    <FaCog className="text-zinc-400" /> Settings
+                  </button>
+
+                  <div className="h-px bg-zinc-100 my-1"></div>
+
+                  <button
+                    onClick={() => { setShowMenu(false); handleLogout(); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left"
+                  >
+                    <FaSignOutAlt /> Sign Out
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         ) : (
-          <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">Login</button>
+          <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">
+            Login
+          </button>
         )}
       </div>
     </nav>
@@ -1205,141 +1380,192 @@ const StatItem = ({ label, val, loading }) => (
 
 // ==================== CONTROL PANEL ====================
 const ControlPanel = ({
-  files, loading, status, searchTerm, sortOption, selectMode,
-  selectedIds, processedCandidates, handleFileChange, handleUpload,
-  handleClearFiles, setSearchTerm, setSortOption, setSelectMode,
-  toggleSelectAll, handleExitMode, handleBulkDelete, handleBulkCopy,
-  isUploading, uploadProgress, isAuthenticated, handleExport
+  files,
+  loading,
+  status,
+  searchTerm,
+  sortOption,
+  selectMode,
+  selectedIds,
+  processedCandidates,
+  handleFileChange,
+  handleUpload,
+  handleClearFiles,
+  setSearchTerm,
+  setSortOption,
+  setSelectMode,
+  toggleSelectAll,
+  handleExitMode,
+  handleBulkDelete,
+  handleBulkCopy,
+  isUploading,
+  uploadProgress,
+  isAuthenticated,
+  handleExport,
+  // removed batchStats as requested
+  activeFilters
 }) => {
 
   // Check if all visible items are selected
-  const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id)
-  const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+  const pageIds = processedCandidates.filter(c => !c.locked).map(c => c._id);
+  const isPageFullySelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id));
 
   // Helper to determine Copy behavior
   const isSelectionActive = selectedIds.length > 0;
 
   const onCopyClick = () => {
     if (isSelectionActive) {
-      handleBulkCopy('selected'); // Copy only selected
+      handleBulkCopy('selected');
     } else {
-      handleBulkCopy('all');      // Copy everything
+      handleBulkCopy('all');
     }
   };
 
   return (
-    <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white">
+    <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white shadow-sm z-20">
 
       {/* 1. TOP ROW: UPLOAD & EXPORT */}
-      <div className="flex gap-2 h-8">
+      <div className="flex gap-2 h-9">
         <div className="relative flex-1 h-full">
           <input
             id="fileInput"
             type="file"
             multiple
+            accept="application/pdf,image/jpeg,image/png"
             onChange={handleFileChange}
             className="hidden"
             disabled={isUploading}
           />
           <label
             htmlFor="fileInput"
-            className={`w-full h-full flex justify-center items-center gap-2 border border-transparent rounded text-xs font-bold uppercase transition select-none 
+            className={`w-full h-full flex justify-center items-center gap-2 border rounded text-xs font-bold transition select-none 
               ${isUploading
-                ? 'opacity-50 cursor-not-allowed bg-zinc-100'
-                : 'hover:border-black cursor-pointer bg-zinc-100 text-zinc-600 hover:text-black'
+                ? 'opacity-50 cursor-not-allowed bg-zinc-50 border-zinc-100 text-zinc-400'
+                : 'border-zinc-200 cursor-pointer bg-zinc-50 text-zinc-600 hover:border-black hover:text-black hover:bg-white'
               }`}
           >
             {files.length > 0
-              ? <><FaCheck /> {files.length} Ready</>
-              : <><FaCloudUploadAlt /> Upload PDFs</>
+              ? <><FaCheck className="text-green-500" /> {files.length} File(s) Ready</>
+              : <><FaCloudUploadAlt className="text-md" /> UPLOAD CV <span className='text-xs font-normal text-zinc-400'>( pdf/img )</span></>
             }
           </label>
         </div>
 
         {files.length > 0 && !isUploading && (
           <>
-            <button onClick={handleUpload} className="px-4 bg-black text-white rounded text-xs font-bold uppercase hover:bg-zinc-800 transition">Start</button>
-            <button onClick={handleClearFiles} className="px-3 bg-zinc-100 hover:bg-red-500 hover:text-white rounded text-zinc-500 transition"><FaTrash size={12} /></button>
+            <button
+              onClick={handleUpload}
+              className="px-5 bg-black text-white rounded text-xs font-medium uppercase hover:bg-zinc-800 transition shadow-sm"
+            >
+              Start
+            </button>
+            <button
+              onClick={handleClearFiles}
+              className="px-3 bg-white border border-zinc-200 hover:border-red-300 hover:bg-red-50 hover:text-red-500 rounded text-zinc-500 transition"
+              title="Clear Queue"
+            >
+              <FaTrash size={12} />
+            </button>
           </>
         )}
 
         <button
           onClick={handleExport}
-          title={isSelectionActive ? `Export ${selectedIds.length} Selected` : "Export All"}
-          className={`px-3 h-full border rounded transition flex items-center justify-center gap-2
+          title={isSelectionActive ? `Export ${selectedIds.length} Selected` : "Export All to Excel"}
+          className={`px-4 w-28 h-full border rounded transition flex items-center justify-center gap-2
             ${isSelectionActive
-              ? 'bg-white text-black border-zinc-100'
-              : 'bg-white border-zinc-200 text-green-700 hover:border-black'
+              ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+              : 'bg-white border-zinc-200 text-zinc-600 hover:border-green-500 hover:text-green-600'
             }`}
         >
-          <FaFileExcel className='text-green-700' size={14} />
-          {isSelectionActive && <span className="text-xs font-medium">({selectedIds.length})</span>}
+          <FaFileExcel size={14} />
+          <span className="hidden xl:inline text-xs font-bold uppercase">Export</span>
         </button>
       </div>
 
       {/* 2. PROGRESS BAR */}
+      {/* This only shows the standard bar (Est Time/Percentage), no batch counter */}
       <AnimatePresence>
         {isUploading && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <div className="bg-zinc-50 border border-zinc-200 rounded p-2">
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-zinc-50 border border-zinc-200 rounded p-2 my-1">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-[10px] font-bold text-green-600 uppercase tracking-widest">{uploadProgress < 90 ? 'Uploading...' : 'Finalizing...'}</span>
+                {/* Shows "Processing..." or "Est Time: 5s" based on what you pass to 'status' */}
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                  {status || "Uploading..."}
+                </span>
                 <span className="text-[10px] font-bold text-black">{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-200 rounded-full overflow-hidden">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${uploadProgress}%` }} transition={{ ease: "easeOut", duration: 0.3 }} className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`} />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${uploadProgress}%` }}
+                  transition={{ ease: "easeOut", duration: 0.3 }}
+                  className={`h-full rounded-full ${uploadProgress >= 90 ? 'bg-green-500' : 'bg-black'}`}
+                />
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* 3. SEARCH */}
-      <div className="relative">
-        <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
-        <input
-          type="text"
-          placeholder="Search candidates..."
-          className="w-full pl-8 pr-20 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <select
-          className="absolute right-1 top-1 bottom-1 px-1 bg-transparent text-xs font-bold text-zinc-500 outline-none cursor-pointer hover:text-black"
-          value={sortOption}
-          onChange={(e) => setSortOption(e.target.value)}
-        >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="nameAsc">Name (A-Z)</option>
-        </select>
+      {/* 3. SEARCH & SORT */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
+          <input
+            type="text"
+            placeholder="Search name, phone, school..."
+            className="w-full pl-8 pr-2 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:border-black focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="relative w-28">
+          <select
+            className="w-full h-8 pl-2 pr-6 bg-white border border-zinc-200 rounded text-xs font-medium text-zinc-600 outline-none cursor-pointer focus:border-black appearance-none"
+            value={sortOption}
+            onChange={(e) => setSortOption(e.target.value)}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="nameAsc">Name (A-Z)</option>
+            <option value="scoreDesc">High Score</option>
+          </select>
+          <FaChevronDown className="absolute right-2 top-2.5 text-zinc-400 pointer-events-none" size={8} />
+        </div>
       </div>
 
-      {/* 4. BOTTOM ACTION ROW (Dynamic Copy Button) */}
-      <div className='grid grid-cols-2 gap-2 pt-1'>
-
-        {/* DYNAMIC COPY BUTTON */}
+      {/* 4. SELECTION ACTIONS */}
+      <div className='grid grid-cols-2 gap-2 pt-1 border-t border-zinc-50'>
+        {/* COPY BUTTON */}
         <button
           onClick={onCopyClick}
           className={`w-full h-8 rounded text-xs font-bold uppercase transition flex items-center justify-center gap-1.5 border
             ${isSelectionActive
-              ? 'bg-black text-white border-black hover:bg-zinc-800'  // Active State
-              : 'bg-white text-black border-zinc-300 hover:bg-zinc-50' // Default State
+              ? 'bg-black text-white border-black hover:bg-zinc-800'
+              : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
             }`}
         >
           <FaCopy size={10} />
           {isSelectionActive ? `Copy (${selectedIds.length})` : 'Copy All'}
         </button>
 
-        {/* SELECTION TOOLS */}
+        {/* SELECT / DELETE TOOLS */}
         <div className="flex gap-1.5">
           <button
             onClick={selectMode ? handleExitMode : () => setSelectMode(true)}
             className={`h-8 text-xs font-bold uppercase rounded border transition flex items-center justify-center gap-1 
               ${selectMode
-                ? 'w-8 bg-red-50 text-red-600 border-red-200'
-                : 'flex-1 bg-white text-black border-black hover:bg-zinc-50'
+                ? 'w-8 bg-zinc-100 text-zinc-600 border-zinc-300 hover:bg-zinc-200'
+                : 'flex-1 bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
               }`}
+            title={selectMode ? "Cancel Selection" : "Select Candidates"}
           >
             {selectMode ? <FaTimes size={12} /> : 'Select'}
           </button>
@@ -1348,7 +1574,7 @@ const ControlPanel = ({
             <>
               <button
                 onClick={toggleSelectAll}
-                className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white"
+                className="flex-1 h-8 px-2 text-xs font-bold uppercase rounded border border-zinc-200 hover:border-black transition truncate bg-white text-black"
               >
                 {isPageFullySelected ? 'None' : 'All'}
               </button>
@@ -1357,10 +1583,10 @@ const ControlPanel = ({
                 onClick={handleBulkDelete}
                 disabled={!isSelectionActive || !isAuthenticated}
                 title={!isAuthenticated ? "Login required" : "Delete Selected"}
-                className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition 
+                className={`h-8 px-3 text-white text-xs font-bold uppercase rounded transition border
                   ${isSelectionActive && isAuthenticated
-                    ? 'bg-red-500 hover:bg-red-600'
-                    : 'bg-zinc-200 cursor-not-allowed'
+                    ? 'bg-red-500 border-red-500 hover:bg-red-600'
+                    : 'bg-zinc-100 border-zinc-100 text-zinc-300 cursor-not-allowed'
                   }`}
               >
                 <FaTrash size={10} />
@@ -1369,10 +1595,9 @@ const ControlPanel = ({
           )}
         </div>
       </div>
-
     </div>
-  )
-}
+  );
+};
 
 // ==================== CANDIDATE CARD (MEMOIZED) ====================
 const CandidateCard = memo(({
@@ -1444,6 +1669,9 @@ const CandidateCard = memo(({
                 // --- NORMAL NAME DISPLAY ---
                 <>
                   <h3 className="text-xs font-semibold text-black uppercase truncate leading-none transition-colors">{person.Name}</h3>
+                  {person.status === "Ready" && (
+                    <ConfidencePie score={person.Confidence} />
+                  )}
                   {person.locked && <FaLock className="text-amber-500 shrink-0 animate-pulse" size={8} />}
                 </>
               )}
@@ -1529,8 +1757,149 @@ const CandidateCard = memo(({
   );
 });
 
-// ==================== COMPACT DASHBOARD PANEL ====================
-// ==================== DASHBOARD PANEL (WITH SEARCH & POSITIONS) ====================
+// --- NEW COMPONENT: CONFIDENCE PIE CHART ---
+const ConfidencePie = ({ score }) => {
+  const safeScore = score || 0;
+
+  // SVG Config
+  const radius = 7;
+  const circumference = 2 * Math.PI * radius; // approx 44
+  const offset = circumference - (safeScore / 100) * circumference;
+
+  // Color Logic
+  let colorClass = "text-green-500";
+  if (safeScore < 80) colorClass = "text-amber-500";
+  if (safeScore < 50) colorClass = "text-red-500";
+
+  return (
+    <div className="flex items-center gap-1.5 ml-2" title={`AI Confidence: ${safeScore}%`}>
+
+      {/* THE PIE CHART (SVG) */}
+      <div className="relative w-3.5 h-3.5 flex-none">
+        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 18 18">
+          {/* Background Ring (Gray) */}
+          <circle
+            cx="9" cy="9" r={radius}
+            fill="transparent"
+            stroke="#f4f4f5" // zinc-100
+            strokeWidth="2.5"
+          />
+          {/* Progress Ring (Colored) */}
+          <circle
+            cx="9" cy="9" r={radius}
+            fill="transparent"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className={`transition-all duration-500 ease-out ${colorClass}`}
+          />
+        </svg>
+      </div>
+
+      {/* PERCENTAGE TEXT */}
+      <span className={`text-[9px] font-bold ${colorClass}`}>
+        {safeScore}%
+      </span>
+    </div>
+  );
+};
+
+// --- COMPONENT: SMART FILTER BAR ---
+const SmartFilterBar = ({
+  filters,
+  setFilters,
+  candidates // We need the full list to generate dropdown options dynamically
+}) => {
+
+  // Helper: Extract unique values for dropdowns
+  const getOptions = (key) => {
+    const values = candidates.map(c => c[key]).filter(v => v && v !== "N/A" && v !== "...");
+    return [...new Set(values)].sort();
+  };
+
+  const locations = getOptions("Location");
+  const positions = getOptions("Position");
+  // Education is usually standardized, but we can extract it dynamically too or hardcode standard levels
+  const schools = getOptions("School");
+
+  const handleChange = (key, val) => {
+    setFilters(prev => ({ ...prev, [key]: val }));
+  };
+
+  const hasActiveFilters = filters.location || filters.position || filters.education || filters.gender;
+
+  return (
+    <div className="flex-none px-4 py-2 bg-zinc-50 border-b border-zinc-200 flex gap-2 items-center overflow-x-auto z-20">
+
+      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mr-2">
+        Smart Filters:
+      </span>
+
+      {/* LOCATION FILTER */}
+      <select
+        className={`bg-white border text-xs font-bold rounded px-2 py-1.5 outline-none cursor-pointer transition
+          ${filters.location ? 'border-black text-black' : 'border-zinc-300 text-zinc-500 hover:border-zinc-400'}
+        `}
+        value={filters.location}
+        onChange={(e) => handleChange('location', e.target.value)}
+      >
+        <option value="">All Locations</option>
+        {locations.map((loc, i) => <option key={i} value={loc}>{loc}</option>)}
+      </select>
+
+      {/* POSITION FILTER */}
+      <select
+        className={`bg-white border text-xs font-bold rounded px-2 py-1.5 outline-none cursor-pointer transition
+          ${filters.position ? 'border-black text-black' : 'border-zinc-300 text-zinc-500 hover:border-zinc-400'}
+        `}
+        value={filters.position}
+        onChange={(e) => handleChange('position', e.target.value)}
+      >
+        <option value="">All Positions</option>
+        {positions.map((pos, i) => <option key={i} value={pos}>{pos}</option>)}
+      </select>
+
+      {/* GENDER FILTER */}
+      <select
+        className={`bg-white border text-xs font-bold rounded px-2 py-1.5 outline-none cursor-pointer transition
+          ${filters.gender ? 'border-black text-black' : 'border-zinc-300 text-zinc-500 hover:border-zinc-400'}
+        `}
+        value={filters.gender}
+        onChange={(e) => handleChange('gender', e.target.value)}
+      >
+        <option value="">All Genders</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+
+      {/* SCHOOL FILTER */}
+      <select
+        className={`bg-white border text-xs font-bold rounded px-2 py-1.5 outline-none cursor-pointer transition
+          ${filters.education ? 'border-black text-black' : 'border-zinc-300 text-zinc-500 hover:border-zinc-400'}
+        `}
+        value={filters.education}
+        onChange={(e) => handleChange('education', e.target.value)}
+      >
+        <option value="">All Education</option>
+        {schools.map((sch, i) => <option key={i} value={sch}>{sch}</option>)}
+      </select>
+
+      {/* CLEAR BUTTON */}
+      {hasActiveFilters && (
+        <button
+          onClick={() => setFilters({ location: "", position: "", education: "", gender: "" })}
+          className="text-[10px] text-red-500 font-bold uppercase hover:bg-red-50 px-2 py-1 rounded ml-auto transition"
+        >
+          Clear X
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ==================== DASHBOARD PANEL ====================
 const DashboardPanel = ({ stats, candidates }) => {
 
   const [filter, setFilter] = useState("");
@@ -1849,51 +2218,193 @@ const SolidInput = ({ label, name, val, onChange, type = "text" }) => (
   </div>
 )
 
-// ==================== NEW: LOGIN MODAL COMPONENT ====================
+// ==================== "AURA" STYLE LOGIN MODAL ====================
 const LoginModal = ({ onClose, onSuccess, API_URL }) => {
+  const [isRegistering, setIsRegistering] = useState(false)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false) // New state for toggle
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [successMsg, setSuccessMsg] = useState("")
+
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setLoading(true); setError("")
-    try {
-      const formData = new FormData()
-      formData.append('username', username)
-      formData.append('password', password)
+    setLoading(true); setError(""); setSuccessMsg("")
 
-      const res = await axios.post(`${API_URL}/token`, formData)
-      onSuccess(res.data.access_token)
+    try {
+      if (isRegistering) {
+        await axios.post(`${API_URL}/register`, { username, password })
+        setSuccessMsg("Account created! Please log in.")
+        setIsRegistering(false); setPassword("")
+      } else {
+        const formData = new FormData()
+        formData.append('username', username)
+        formData.append('password', password)
+        const res = await axios.post(`${API_URL}/token`, formData)
+        onSuccess(res.data.access_token, username)
+      }
     } catch (err) {
-      setError("Invalid username or password")
+      if (isRegistering) setError(err.response?.data?.detail || "Registration failed.")
+      else setError("Invalid username or password")
     } finally {
       setLoading(false)
     }
   }
 
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true); setError("")
+    try {
+      const res = await axios.post(`${API_URL}/auth/google`, {
+        token: credentialResponse.credential
+      });
+      onSuccess(res.data.access_token, res.data.username);
+    } catch (err) {
+      setError("Google Sign-In failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-lg shadow-2xl w-full max-w-sm overflow-hidden"
-      >
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2"><FaUserShield /> Admin Login</h2>
-            <button onClick={onClose}><BsXLg /></button>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-zinc-100/60 backdrop-blur-md select-none">
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 10 }}
+          transition={{ duration: 0.2 }}
+          className="bg-white w-full max-w-[420px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] overflow-hidden relative border border-white"
+        >
+
+          {/* --- TOP GLOW EFFECT --- */}
+          <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-40 h-40 bg-green-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+
+          {/* Close Button */}
+          <button onClick={onClose} className="absolute top-5 right-5 text-zinc-400 hover:text-black transition z-10">
+            <BsXLg size={14} />
+          </button>
+
+          <div className="p-8 relative z-0">
+
+            {/* --- HEADER --- */}
+            <div className="text-center mb-8">
+
+              <img
+                src="/logo.svg"
+                alt="Logo"
+                className="w-12 h-12 mx-auto mb-4 object-contain drop-shadow-md"
+              />
+
+              <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">
+                {isRegistering ? "Create Account" : "Welcome back"}
+              </h2>
+              <p className="text-zinc-500 text-sm mt-1">
+                {isRegistering ? "Please enter details to sign up" : "Please enter your details to sign in"}
+              </p>
+            </div>
+
+            {/* --- GOOGLE LOGIN --- */}
+            <div className="flex justify-center mb-6">
+              <div className="w-full flex justify-center">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError("Google Sign-In Failed")}
+                  theme="outline"
+                  size="large"
+                  shape="pill"
+                  width="350"
+                  text="continue_with"
+                />
+              </div>
+            </div>
+
+            {/* --- DIVIDER --- */}
+            <div className="relative flex py-1 items-center mb-6">
+              <div className="grow border-t border-zinc-100"></div>
+              <span className="shrink-0 mx-3 text-[10px] font-bold text-zinc-300 uppercase tracking-widest">OR</span>
+              <div className="grow border-t border-zinc-100"></div>
+            </div>
+
+            {/* --- FORM --- */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+
+              {/* Username Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-700 ml-1">Username or Email</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  className="w-full bg-white border border-zinc-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-300 hover:border-zinc-300"
+                  placeholder="Enter your username"
+                  required
+                />
+              </div>
+
+              {/* Password Input with Eye Toggle */}
+              <div className="space-y-1.5 relative">
+                <label className="text-xs font-semibold text-zinc-700 ml-1">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full bg-white border border-zinc-200 px-4 py-3 rounded-xl text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-300 hover:border-zinc-300 pr-10"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-3.5 text-zinc-400 hover:text-black transition"
+                  >
+                    {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Extra Options (Visual Only) */}
+              {!isRegistering && (
+                <div className="flex justify-between items-center text-xs mt-2 px-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-zinc-500 hover:text-zinc-800 transition">
+                    <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500" />
+                    Remember me
+                  </label>
+                  <button type="button" className="font-semibold text-zinc-900 hover:underline">Forgot password?</button>
+                </div>
+              )}
+
+              {/* Errors/Success */}
+              {error && <p className="text-red-500 text-xs font-bold text-center mt-2">{error}</p>}
+              {successMsg && <p className="text-green-600 text-xs font-bold text-center mt-2">{successMsg}</p>}
+
+              {/* Main Button */}
+              <button
+                disabled={loading}
+                className="w-full bg-zinc-900 text-white font-bold py-3.5 rounded-xl text-sm tracking-wide hover:bg-black hover:shadow-lg hover:shadow-zinc-900/20 active:scale-[0.99] transition-all duration-200 mt-2"
+              >
+                {loading ? <FaSpinner className="animate-spin mx-auto" /> : (isRegistering ? "Create account" : "Sign in")}
+              </button>
+            </form>
+
+            {/* Footer */}
+            <div className="mt-8 text-center text-sm text-zinc-500">
+              {isRegistering ? "Already have an account?" : "Don't have an account?"}
+              <button
+                onClick={() => { setIsRegistering(!isRegistering); setError(""); setSuccessMsg(""); }}
+                className="ml-1.5 font-bold text-zinc-900 hover:underline"
+              >
+                {isRegistering ? "Sign in" : "Sign up"}
+              </button>
+            </div>
+
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} className="w-full border p-2 rounded" autoFocus />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full border p-2 rounded" />
-            {error && <p className="text-red-500 font-bold text-xs">{error}</p>}
-            <button disabled={loading} className="w-full bg-black text-white font-bold py-2 rounded uppercase text-sm">
-              {loading ? "Verifying..." : "Login"}
-            </button>
-          </form>
-        </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </GoogleOAuthProvider>
   )
 }
