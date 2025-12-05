@@ -20,7 +20,7 @@ import {
   FaSearchMinus, FaSearchPlus, FaRedo, FaLock, FaUnlock, FaVenusMars, FaTimes,
   FaDownload, FaSpinner, FaSync, FaUserShield, FaSignOutAlt, FaSignInAlt,
   FaUserFriends, FaUniversity, FaGlobeAsia, FaBriefcase, FaUserClock,
-  FaChartLine, FaChevronDown, FaCog, FaEye, FaEyeSlash
+  FaChartLine, FaChevronDown, FaCog, FaEye, FaEyeSlash, FaBars
 } from 'react-icons/fa'
 import { BsXLg } from "react-icons/bs";
 import { FcGoogle } from "react-icons/fc";
@@ -1219,35 +1219,36 @@ const Navbar = ({
   autoDeleteEnabled,
   credits
 }) => {
-
   const [showMenu, setShowMenu] = useState(false)
-  const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?";
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?"
 
   return (
     <nav className="flex-none h-14 px-4 border-b border-zinc-100 bg-white flex items-center justify-between z-50 sticky top-0 select-none">
 
       {/* LEFT: LOGO + GREETING */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 lg:gap-3 min-w-0 flex-1">
         <img
           src="/logo.svg"
           alt="App Logo"
-          className="w-8 h-8 object-contain"
+          className="w-8 h-8 object-contain shrink-0"
           onError={(e) => { e.target.style.display = 'none' }}
         />
 
-        <div className="flex flex-col justify-center">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col justify-center min-w-0">
+          <div className="flex items-center gap-1.5 lg:gap-2">
             <span className="text-xs text-zinc-400 leading-none mb-0.5">
               Welcome Back,
             </span>
 
             {isAuthenticated && autoDeleteEnabled && (
               <div
-                className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide cursor-help"
+                className="hidden sm:flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[8px] lg:text-[9px] font-bold text-green-700 uppercase tracking-wide cursor-help shrink-0"
                 title="Auto-Delete is Enabled (24h)"
               >
-                <FaUserShield size={9} />
-                <span>Auto-Delete On</span>
+                <FaUserShield size={8} className="lg:w-[9px] lg:h-[9px]" />
+                <span>Auto-Delete</span>
+                <span className="sm:hidden">Protected</span>
               </div>
             )}
           </div>
@@ -1258,71 +1259,187 @@ const Navbar = ({
       </div>
 
       {/* RIGHT: ACTIONS */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+        {/* Install App Button - Hidden on mobile */}
         {deferredPrompt && (
-          <button onClick={handleInstallClick} className="hidden md:flex items-center gap-2 px-3 py-1.5 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-50 transition">
+          <button 
+            onClick={handleInstallClick} 
+            className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-blue-600 rounded-md text-[10px] font-bold uppercase hover:bg-blue-50 transition"
+          >
             <FaDownload size={10} /> Install App
           </button>
         )}
 
         {isAuthenticated ? (
-          <div className="flex items-center gap-3 ml-2">
-            
-            {/* 1. CREDIT BADGE (Separated) */}
-            <CreditBadge
-              credits={credits}
-              onClick={onOpenSettings}
-            />
+          <>
+            {/* DESKTOP VIEW - Credit Badge + Avatar */}
+            <div className="hidden md:flex items-center gap-3">
+              <CreditBadge credits={credits} onClick={onOpenSettings} />
 
-            {/* 2. AVATAR + MENU (Grouped in their own relative container) */}
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="flex items-center gap-1 outline-none group"
-              >
-                <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[10px] font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
-                  {userInitial}
-                </div>
-                <FaChevronDown size={8} className="text-zinc-300 group-hover:text-zinc-500 transition" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="flex items-center gap-1.5 outline-none group"
+                >
+                  <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
+                    {userInitial}
+                  </div>
+                  <FaChevronDown size={9} className="text-zinc-300 group-hover:text-zinc-500 transition" />
+                </button>
 
-              {/* DROPDOWN MENU */}
-              <AnimatePresence>
-                {showMenu && (
+                {/* Desktop Dropdown Menu */}
+                <AnimatePresence>
+                  {showMenu && (
+                    <>
+                      {/* Backdrop to close menu */}
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setShowMenu(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                        transition={{ duration: 0.1 }}
+                        className="absolute right-0 top-12 w-48 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50 py-1"
+                      >
+                        <div className="px-4 py-2 border-b border-zinc-50">
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
+                          <p className="text-xs font-bold text-black truncate">{currentUser}</p>
+                        </div>
+
+                        <button
+                          onClick={() => { setShowMenu(false); onOpenSettings(); }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
+                        >
+                          <FaCog className="text-zinc-400" /> Settings
+                        </button>
+
+                        <div className="h-px bg-zinc-100 my-1"></div>
+
+                        <button
+                          onClick={() => { setShowMenu(false); handleLogout(); }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left"
+                        >
+                          <FaSignOutAlt /> Sign Out
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* MOBILE VIEW - Hamburger Menu */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-2 text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 rounded-lg transition"
+            >
+              {showMobileMenu ? <FaTimes size={18} /> : <FaBars size={18} />}
+            </button>
+
+            {/* Mobile Slide-out Menu */}
+            <AnimatePresence>
+              {showMobileMenu && (
+                <>
+                  {/* Backdrop */}
                   <motion.div
-                    initial={{ opacity: 0, y: 5, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-xl border border-zinc-100 overflow-hidden z-50 py-1"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowMobileMenu(false)}
+                    className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
+                  />
+                  
+                  {/* Slide-out Panel */}
+                  <motion.div
+                    initial={{ x: '100%' }}
+                    animate={{ x: 0 }}
+                    exit={{ x: '100%' }}
+                    transition={{ type: 'tween', duration: 0.3 }}
+                    className="md:hidden fixed top-0 right-0 bottom-0 w-72 max-w-[85vw] bg-white shadow-2xl z-50 flex flex-col border-l border-zinc-200"
                   >
-                    <div className="px-4 py-2 border-b border-zinc-50">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
-                      <p className="text-xs font-bold text-black truncate">{currentUser}</p>
+                    {/* Close Button Bar */}
+                    <div className="h-14 lg:h-16 flex items-center justify-between px-4 border-b border-zinc-200 bg-white shrink-0">
+                      <h3 className="text-base font-medium text-black">CV Tracker</h3>
+                      <button
+                        onClick={() => setShowMobileMenu(false)}
+                        className="p-2 text-zinc-600 hover:bg-zinc-100 active:bg-zinc-200 rounded-full transition-colors"
+                        aria-label="Close menu"
+                      >
+                        <FaTimes size={18} />
+                      </button>
                     </div>
 
-                    <button
-                      onClick={() => { setShowMenu(false); onOpenSettings(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
-                    >
-                      <FaCog className="text-zinc-400" /> Settings
-                    </button>
+                    {/* User Info Header */}
+                    <div className="p-5 border-b border-zinc-100 bg-zinc-50">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-12 h-12 rounded-full bg-zinc-200 border-2 border-zinc-300 flex items-center justify-center text-lg font-bold text-zinc-700">
+                          {userInitial}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-black truncate">{currentUser}</p>
+                          <p className="text-xs text-zinc-500">Account Settings</p>
+                        </div>
+                      </div>
 
-                    <div className="h-px bg-zinc-100 my-1"></div>
+                      {/* Credit Badge in Mobile Menu */}
+                      <div className="pt-3 border-t border-zinc-200">
+                        <CreditBadge credits={credits} onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} />
+                      </div>
+                    </div>
 
-                    <button
-                      onClick={() => { setShowMenu(false); handleLogout(); }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left"
-                    >
-                      <FaSignOutAlt /> Sign Out
-                    </button>
+                    {/* Menu Items */}
+                    <div className="flex-1 overflow-y-auto p-3">
+                      {autoDeleteEnabled && (
+                        <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FaUserShield className="text-green-600" size={12} />
+                            <span className="text-xs font-bold text-green-800 uppercase">Auto-Delete Active</span>
+                          </div>
+                          <p className="text-xs text-green-700">Files deleted after 24 hours</p>
+                        </div>
+                      )}
+
+                      {deferredPrompt && (
+                        <button
+                          onClick={() => { setShowMobileMenu(false); handleInstallClick(); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-lg transition mb-2"
+                        >
+                          <FaDownload size={14} />
+                          <span>Install App</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => { setShowMobileMenu(false); onOpenSettings(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 rounded-lg transition text-left"
+                      >
+                        <FaCog className="text-zinc-400" size={14} />
+                        <span>Settings</span>
+                      </button>
+                    </div>
+
+                    {/* Sign Out Button at Bottom */}
+                    <div className="p-3 border-t border-zinc-100">
+                      <button
+                        onClick={() => { setShowMobileMenu(false); handleLogout(); }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 rounded-lg transition"
+                      >
+                        <FaSignOutAlt />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
                   </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
+                </>
+              )}
+            </AnimatePresence>
+          </>
         ) : (
-          <button onClick={() => setShowLoginModal(true)} className="ml-2 px-4 py-1.5 bg-black text-white rounded text-[10px] font-bold uppercase hover:bg-zinc-800 transition">
+          <button 
+            onClick={() => setShowLoginModal(true)} 
+            className="px-3 lg:px-4 py-1.5 lg:py-2 bg-black text-white rounded text-[10px] lg:text-xs font-bold uppercase hover:bg-zinc-800 active:bg-zinc-900 transition"
+          >
             Login
           </button>
         )}

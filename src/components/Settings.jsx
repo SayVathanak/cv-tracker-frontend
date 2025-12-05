@@ -4,11 +4,12 @@ import axios from 'axios';
 import { motion } from 'framer-motion'
 import {
     FaUserShield, FaFileExcel, FaCloudUploadAlt,
-    FaSave, FaTrash, FaCheck, FaUser, FaCreditCard, FaLock
+    FaSave, FaTrash, FaCheck, FaUser, FaCreditCard, FaLock, FaBars, FaTimes, FaArrowLeft
 } from 'react-icons/fa'
 
 const SettingsPage = ({ onClose, initialSettings, onSave }) => {
     const [activeTab, setActiveTab] = useState('general'); // Default tab
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(true); // New state for mobile view: true=show menu, false=show content
 
     // Initialize local state
     const [localSettings, setLocalSettings] = useState(initialSettings || {
@@ -29,6 +30,18 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     const currentUserEmail = initialSettings.profile?.username;
+
+    // Helper to switch tabs and close the mobile menu
+    const handleTabChange = (id) => {
+        setActiveTab(id);
+        setIsMobileMenuOpen(false); // Switch to content view on mobile
+    }
+    
+    // Function to handle successful payment and update credits
+    const onPaymentSuccess = () => {
+        fetchUserCredits();
+        // Add any other post-payment logic here
+    }
 
     // 1. Fetch Credits (FIXED)
     useEffect(() => {
@@ -83,8 +96,8 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
                     clearInterval(interval);
                     
                     // --- ADD THESE 2 LINES ---
-                    setQrData(null);          // <--- This closes the QR Modal
-                    setPaymentSuccess(true);  // <--- This stops the loading state
+                    setQrData(null);          // <--- This closes the QR Modal
+                    setPaymentSuccess(true);  // <--- This stops the loading state
                     // -------------------------
 
                     alert("Payment Successful!");
@@ -114,45 +127,96 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
         }));
     };
 
+    const getTabTitle = (tab) => {
+        switch (tab) {
+            case 'general': return 'Privacy Configuration';
+            case 'account': return 'Account Profile';
+            case 'parsing': return 'Parsing Rules';
+            case 'export': return 'Excel Exports';
+            case 'billing': return 'Billing & Usage';
+            default: return 'Settings';
+        }
+    }
+
+
     return (
-        <div className="fixed inset-0 z-100 bg-black/20 backdrop-blur-sm flex justify-center items-center p-4 lg:p-10 select-none">
+        <div className="fixed inset-0 z-100 bg-black/20 backdrop-blur-sm flex justify-center items-center p-0 lg:p-10 select-none"> {/* p-0 for mobile fullscreen */}
 
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white w-full max-w-4xl h-full max-h-[700px] rounded-xl shadow-2xl flex overflow-hidden border border-zinc-200"
+                // RESPONSIVE LAYOUT CHANGE: h-full on mobile, max-h-[700px] on desktop
+                className="bg-white w-full max-w-4xl h-full lg:max-h-[700px] rounded-none lg:rounded-xl shadow-2xl flex flex-col lg:flex-row overflow-hidden border border-zinc-200"
             >
 
-                {/* LEFT SIDEBAR */}
-                <div className="w-64 bg-zinc-50 border-r border-zinc-200 flex flex-col">
-                    <div className="p-6 border-b border-zinc-200">
-                        <h2 className="text-xl font-bold tracking-tight text-black">Settings</h2>
-                        <p className="text-xs text-zinc-400 mt-1">Manage your workspace</p>
+                {/* MOBILE HEADER - Visible on mobile when content is shown */}
+                {!isMobileMenuOpen && (
+                    <div className="lg:hidden h-14 border-b border-zinc-100 flex items-center px-4 justify-between">
+                        <button 
+                            onClick={() => setIsMobileMenuOpen(true)}
+                            className="text-zinc-500 hover:text-black transition"
+                        >
+                            <FaArrowLeft size={16} />
+                        </button>
+                        <h3 className="text-base font-bold text-zinc-800">
+                            {getTabTitle(activeTab)}
+                        </h3>
+                        <button
+                            onClick={() => onSave(localSettings)}
+                            className="flex items-center gap-1 bg-black text-white px-3 py-1 rounded text-xs font-bold uppercase hover:bg-zinc-800 transition shadow-lg"
+                        >
+                            <FaSave size={10} /> Save
+                        </button>
+                    </div>
+                )}
+                
+                {/* DESKTOP/MOBILE MENU TOGGLE */}
+                <div 
+                    // Hide on mobile if content is visible, show full width on mobile if menu is open, show w-64 on desktop
+                    className={`
+                        ${isMobileMenuOpen ? 'w-full' : 'hidden'} 
+                        lg:w-64 lg:flex lg:flex-col 
+                        bg-zinc-50 border-r border-zinc-200 
+                        flex-col h-full overflow-y-auto
+                    `}
+                >
+                    <div className="p-6 border-b border-zinc-200 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-bold tracking-tight text-black">Settings</h2>
+                            <p className="text-xs text-zinc-400 mt-1">Manage your workspace</p>
+                        </div>
+                        {/* Mobile Close Button */}
+                        <button 
+                            onClick={onClose} 
+                            className="lg:hidden text-zinc-500 hover:text-black"
+                        >
+                            <FaTimes size={18} />
+                        </button>
                     </div>
 
                     <nav className="flex-1 p-4 space-y-1">
-                        <SidebarItem icon={FaUser} label="Account" id="account" active={activeTab} onClick={setActiveTab} />
-                        <SidebarItem icon={FaUserShield} label="Privacy & Data" id="general" active={activeTab} onClick={setActiveTab} />
-                        <SidebarItem icon={FaCloudUploadAlt} label="Parsing Rules" id="parsing" active={activeTab} onClick={setActiveTab} />
-                        <SidebarItem icon={FaFileExcel} label="Excel Exports" id="export" active={activeTab} onClick={setActiveTab} />
-                        <SidebarItem icon={FaCreditCard} label="Billing & Usage" id="billing" active={activeTab} onClick={setActiveTab} />
+                        <SidebarItem icon={FaUser} label="Account" id="account" active={activeTab} onClick={handleTabChange} />
+                        <SidebarItem icon={FaUserShield} label="Privacy & Data" id="general" active={activeTab} onClick={handleTabChange} />
+                        <SidebarItem icon={FaCloudUploadAlt} label="Parsing Rules" id="parsing" active={activeTab} onClick={handleTabChange} />
+                        <SidebarItem icon={FaFileExcel} label="Excel Exports" id="export" active={activeTab} onClick={handleTabChange} />
+                        <SidebarItem icon={FaCreditCard} label="Billing & Usage" id="billing" active={activeTab} onClick={handleTabChange} />
                     </nav>
 
-                    <div className="p-4 border-t border-zinc-200">
+                    <div className="p-4 border-t border-zinc-200 hidden lg:block"> {/* Hide close button on mobile menu screen, use X icon instead */}
                         <button onClick={onClose} className="w-full py-2 text-xs font-bold uppercase text-zinc-500 hover:text-black border border-zinc-200 rounded bg-white hover:bg-zinc-50 transition">
                             Close
                         </button>
                     </div>
                 </div>
 
-                {/* RIGHT CONTENT AREA */}
-                <div className="flex-1 flex flex-col bg-white">
+                {/* RIGHT CONTENT AREA - CONDITIONAL DISPLAY FOR MOBILE */}
+                <div className={`flex-1 flex flex-col bg-white ${isMobileMenuOpen ? 'hidden lg:flex' : 'flex'}`}>
 
-                    {/* HEADER */}
-                    <div className="h-16 border-b border-zinc-100 flex items-center px-8 justify-between">
+                    {/* DESKTOP HEADER - Hidden on mobile, Mobile header used instead */}
+                    <div className="h-16 border-b border-zinc-100 items-center px-8 justify-between hidden lg:flex">
                         <h3 className="text-lg font-bold capitalize text-zinc-800">
-                            {activeTab === 'general' ? 'Privacy Configuration' : `${activeTab.replace('-', ' ')}`}
+                            {getTabTitle(activeTab)}
                         </h3>
                         <button
                             onClick={() => onSave(localSettings)}
@@ -163,7 +227,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
                     </div>
 
                     {/* SCROLLABLE CONTENT */}
-                    <div className="flex-1 overflow-y-auto p-8">
+                    <div className="flex-1 overflow-y-auto p-4 lg:p-8"> {/* p-4 for mobile padding */}
 
                         {/* --- TAB: ACCOUNT --- */}
                         {activeTab === 'account' && (
@@ -251,7 +315,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave }) => {
                                         </button>
                                     </div>
                                     <p className="text-xs text-zinc-500 leading-relaxed font-medium">
-                                        When enabled, original PDF files will be automatically marked for deletion <strong>24 hours</strong> after upload.
+                                        When enabled, original PDF files will be automatically marked for deletion **24 hours** after upload.
                                     </p>
                                 </div>
 
@@ -371,7 +435,7 @@ const SidebarItem = ({ icon: Icon, label, id, active, onClick }) => (
         onClick={() => onClick(id)}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-xs font-bold uppercase transition-all duration-200
       ${active === id
-                ? 'bg-zinc-100 text-black translate-x-1'
+                ? 'bg-zinc-100 text-black translate-x-0 lg:translate-x-1' // Removed translate-x-1 on mobile for full width
                 : 'text-zinc-500 hover:bg-zinc-50 hover:text-black'
             }`}
     >
