@@ -126,7 +126,7 @@ function App() {
   const fetchCredits = async () => {
     try {
       const token = localStorage.getItem("cv_token");
-      if (!token) return; 
+      if (!token) return;
 
       const res = await axios.get(`${API_URL}/users/me`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -900,7 +900,7 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       {/* Settings Page with AnimatePresence handled internally in Settings.jsx, but wrapped here for conditional render */}
       {showSettings && (
         <SettingsPage
@@ -911,7 +911,7 @@ function App() {
           currentCredits={credits}
         />
       )}
-      
+
       {showLoginModal && (
         <LoginModal
           onClose={() => setShowLoginModal(false)}
@@ -929,25 +929,32 @@ const Navbar = ({
   deferredPrompt, handleInstallClick, isAuthenticated, setShowLoginModal,
   handleLogout, currentUser, onOpenSettings, autoDeleteEnabled, credits
 }) => {
-  const [showMenu, setShowMenu] = useState(false) 
+  const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?"
 
   // --- MENU ANIMATIONS ---
   const menuVariants = {
-    closed: { 
-        x: "100%",
-        transition: { type: "spring", stiffness: 400, damping: 40 }
+    closed: {
+      x: "100%",
+      transition: { type: "spring", stiffness: 400, damping: 40 }
     },
-    open: { 
-        x: 0,
-        transition: { type: "spring", stiffness: 300, damping: 30, staggerChildren: 0.07, delayChildren: 0.2 }
+    open: {
+      x: 0,
+      transition: {
+        type: "spring",
+        stiffness: 300,
+        damping: 30,
+        staggerChildren: 0.05, // Reduced from 0.07 (faster sequence)
+        delayChildren: 0.05    // Reduced from 0.2 (starts almost immediately)
+      }
     }
   };
 
   const itemVariants = {
-    closed: { x: 50, opacity: 0 },
-    open: { x: 0, opacity: 1 }
+    // Start slightly closer (20px instead of 50px) so the travel distance is shorter
+    closed: { x: 20, opacity: 0 },
+    open: { x: 0, opacity: 1, transition: { duration: 0.2 } }
   };
 
   return (
@@ -1022,24 +1029,26 @@ const Navbar = ({
             <AnimatePresence>
               {showMobileMenu && (
                 <>
+                  {/* Overlay */}
                   <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     onClick={() => setShowMobileMenu(false)}
-                    className="md:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-50"
+                    className="md:hidden fixed inset-0 bg-black/30 z-50 will-change-opacity"
                   />
+                  {/* Sliding Menu */}
                   <motion.div
                     variants={menuVariants}
                     initial="closed" animate="open" exit="closed"
-                    className="md:hidden fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white shadow-2xl z-60 flex flex-col"
+                    className="md:hidden fixed top-0 right-0 bottom-0 w-full bg-white shadow-2xl z-60 flex flex-col will-change-transform"
                   >
                     <div className="h-20 flex items-end justify-between px-6 pb-4 border-b border-zinc-100 bg-zinc-50 shrink-0">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-sm font-bold shadow-sm">
-                            {userInitial}
+                          {userInitial}
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-black">{currentUser}</p>
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Free Plan</p>
+                          <p className="text-sm font-bold text-black">{currentUser}</p>
+                          <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Free Plan</p>
                         </div>
                       </div>
                       <button onClick={() => setShowMobileMenu(false)} className="p-2 bg-white rounded-full shadow-sm text-zinc-400 hover:text-black">
@@ -1048,23 +1057,23 @@ const Navbar = ({
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                        <motion.div variants={itemVariants} className="p-4 bg-zinc-900 rounded-xl text-white mb-6 shadow-lg">
-                            <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Available Credits</p>
-                            <div className="flex justify-between items-end">
-                                <span className="text-3xl font-bold">{credits}</span>
-                                <button onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} className="text-[10px] font-bold bg-white text-black px-2 py-1 rounded">ADD MORE</button>
-                            </div>
-                        </motion.div>
+                      <motion.div variants={itemVariants} className="p-4 bg-zinc-900 rounded-xl text-white mb-6 shadow-lg">
+                        <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Available Credits</p>
+                        <div className="flex justify-between items-end">
+                          <span className="text-3xl font-bold">{credits}</span>
+                          <button onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} className="text-[10px] font-bold bg-white text-black px-2 py-1 rounded">ADD MORE</button>
+                        </div>
+                      </motion.div>
 
-                        <motion.button variants={itemVariants} onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50 rounded-xl transition">
-                           <FaUser className="text-zinc-400" /> Account Settings
+                      <button onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50 rounded-xl transition">
+                        <FaUser className="text-zinc-400" /> Account Settings
+                      </button>
+
+                      {deferredPrompt && (
+                        <motion.button variants={itemVariants} onClick={() => { setShowMobileMenu(false); handleInstallClick(); }} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl transition">
+                          <FaDownload /> Install App
                         </motion.button>
-                        
-                        {deferredPrompt && (
-                             <motion.button variants={itemVariants} onClick={() => { setShowMobileMenu(false); handleInstallClick(); }} className="w-full flex items-center gap-4 px-4 py-3 text-sm font-bold text-blue-600 bg-blue-50 rounded-xl transition">
-                                <FaDownload /> Install App
-                             </motion.button>
-                        )}
+                      )}
                     </div>
 
                     <motion.div variants={itemVariants} className="p-6 border-t border-zinc-100">
