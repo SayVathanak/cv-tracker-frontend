@@ -11,7 +11,7 @@ import { IoMdPeople, IoIosAlbums } from "react-icons/io";
 
 const StatCard = ({ label, value, icon, trend, color = "black" }) => (
   <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 flex flex-col justify-between h-28 relative overflow-hidden group">
-    <div className={`absolute right-0 top-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-${color}`}>
+    <div className={`absolute right-0 bottom-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-${color}`}>
       {icon}
     </div>
     <div>
