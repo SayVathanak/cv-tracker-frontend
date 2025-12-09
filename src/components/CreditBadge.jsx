@@ -8,10 +8,10 @@ const CreditBadge = ({ credits, onClick }) => {
     <button 
       onClick={onClick}
       className={`
-        flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all
+        flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold md:border transition-all
         ${isLow 
-          ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
-          : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:border-zinc-400 hover:text-black"
+          ? "md:bg-red-50 text-red-600 border-red-200 hover:bg-red-100" 
+          : "md:bg-zinc-100 text-zinc-700 border-zinc-200 hover:border-zinc-400 hover:text-black"
         }
       `}
     >
