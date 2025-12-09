@@ -64,7 +64,7 @@ const CandidateCard = memo(({ person, expandedId, selectedIds, selectMode, copie
                 </>
               )}
             </div>
-            {!isProcessing && person.Position && person.Position !== "N/A" && <p className="text-[10px] font-bold text-blue-600 truncate mt-0.5 uppercase">{person.Position}</p>}
+            {!isProcessing && person.Position && person.Position !== "N/A" && <p className="text-[10px] font-bold text-blue-600 truncate tracking-wider mt-0.5 uppercase">{person.Position}</p>}
             <p className="text-xs text-zinc-500 font-medium truncate leading-tight mt-1">{isProcessing ? "AI is reading document..." : (person.School || "N/A")}</p>
           </div>
         </div>

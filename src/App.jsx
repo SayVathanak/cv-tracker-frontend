@@ -103,10 +103,31 @@ function App() {
       const token = localStorage.getItem("cv_token");
       if (!token) return;
 
+      // This endpoint now returns { current_credits, settings, username }
       const res = await axios.get(`${API_URL}/users/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // 1. Update Credits
       setCredits(res.data.current_credits);
+
+      // 2. Update App Settings from Cloud (NEW ADDITION)
+      if (res.data.settings && Object.keys(res.data.settings).length > 0) {
+        setAppSettings(prev => ({
+          ...prev,
+          ...res.data.settings,
+          profile: {
+            ...prev.profile,
+            ...res.data.settings.profile,
+            // Ensure we don't accidentally overwrite the username if the DB sends a partial object
+            username: res.data.username || prev.profile.username
+          }
+        }));
+
+        // Optional: Sync local storage immediately so it persists on reload
+        localStorage.setItem('cv_app_settings', JSON.stringify(res.data.settings));
+      }
+
     } catch (e) { console.error(e); }
   };
 
@@ -133,7 +154,8 @@ function App() {
         const lowerSearch = searchTerm.toLowerCase();
         const matchesName = person.Name.toLowerCase().includes(lowerSearch);
         const matchesTel = person.Tel.includes(searchTerm);
-        if (!matchesName && !matchesTel) return false;
+        const matchesPosition = person.Position && person.Position.toLowerCase().includes(lowerSearch);
+        if (!matchesName && !matchesTel && !matchesPosition) return false;
       }
       if (filters.location && person.Location !== filters.location) return false;
       if (filters.position && person.Position !== filters.position) return false;
@@ -168,13 +190,16 @@ function App() {
     }
   })
 
+  // --- MODIFIED FUNCTION ---
   const handleLoginSuccess = (token, username) => {
     localStorage.setItem("cv_token", token)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
     setIsAuthenticated(true)
     setCurrentUser(username)
     setShowLoginModal(false)
-    Toast.fire({ icon: 'success', title: 'Login Successful' })
+
+    // Force a reload to ensure fresh state for the new user
+    window.location.reload()
   }
 
   const handleLogout = () => {
@@ -252,9 +277,8 @@ function App() {
   }
 
   const fetchCandidates = async (page = 1, search = searchTerm) => {
-    // 1. ADD THIS GUARD CLAUSE
     if (!isAuthenticated && !localStorage.getItem("cv_token")) {
-      return; // Stop here. Don't call the API if we aren't logged in.
+      return;
     }
 
     setLoading(true)
@@ -267,9 +291,8 @@ function App() {
       setTotalItems(res.data.total)
       setTotalPages(Math.ceil(res.data.total / res.data.limit))
     } catch (error) {
-      // 2. OPTIONAL: Handle expired session automatically
       if (error.response && error.response.status === 401) {
-        handleLogout(); // Log the user out if their token is invalid
+        handleLogout();
       } else {
         console.error(error)
       }
@@ -338,14 +361,12 @@ function App() {
 
   const handleUpload = async () => {
     if (!checkAuth()) return;
-    
+
     if (files.length === 0) {
       Toast.fire({ icon: 'warning', title: 'Please select files first' });
       return;
     }
 
-    // --- FIX STARTS HERE: Pre-validate credits to prevent UI flickering ---
-    // We assume 1 credit per file. If your logic is different, adjust the condition.
     if (credits < files.length) {
       MySwal.fire({
         icon: 'error',
@@ -359,11 +380,9 @@ function App() {
           setShowCreditModal(true);
         }
       });
-      return; // Stop execution here so Upload Modal never opens
+      return;
     }
-    // --- FIX ENDS HERE ---
 
-    // Reset upload state and open modal
     setUploadError(null);
     setUploadProgress(0);
     setStatus("Preparing files...");
@@ -372,7 +391,7 @@ function App() {
 
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
+      formData.append('files', files[i]);
     }
 
     try {
@@ -380,39 +399,34 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const rawPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(Math.min(rawPercent, 95)); 
+          setUploadProgress(Math.min(rawPercent, 95));
         }
       });
 
-      // Success
       setUploadProgress(100);
       const count = res.data.details.length;
       setStatus(`Successfully uploaded ${count} files. Processing started.`);
-      
-      // Update credits immediately
+
       fetchCredits();
-      
+
       setTimeout(() => {
         handleClearFiles();
         fetchCandidates();
-        setIsUploading(false); 
+        setIsUploading(false);
       }, 1000);
 
     } catch (error) {
       console.error("Upload Error:", error);
       setIsUploading(false);
-      
+
       let serverMsg = "An unexpected error occurred.";
-      // Fixed variable shadowing: renamed 'status' to 'errStatus' to avoid conflict with state variable
       const errStatus = error.response?.status;
-      
+
       if (error.response?.data?.detail) serverMsg = error.response.data.detail;
 
-      // Handle Specific Errors
       if (errStatus === 402) {
-        // Fallback: If local check failed but server still says 402
         setShowUploadModal(false);
-        
+
         MySwal.fire({
           icon: 'error',
           title: 'Insufficient Credits',
@@ -425,10 +439,9 @@ function App() {
             setShowCreditModal(true);
           }
         });
-        return; 
-      } 
-      
-      // Generic Error display in the modal
+        return;
+      }
+
       setUploadError(serverMsg);
       setStatus("Upload Failed");
     }
@@ -941,7 +954,7 @@ function App() {
         />
       )}
 
-      <UploadModal 
+      <UploadModal
         isOpen={showUploadModal}
         progress={uploadProgress}
         status={status}
@@ -950,7 +963,7 @@ function App() {
         fileCount={files.length}
       />
 
-      <CreditModal 
+      <CreditModal
         isOpen={showCreditModal}
         onClose={() => setShowCreditModal(false)}
         onSuccess={() => fetchCredits()}

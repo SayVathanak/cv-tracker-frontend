@@ -31,19 +31,19 @@ const Navbar = ({
         
         {/* --- LEFT: Logo & User Info --- */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <img src="/logo.svg" alt="Logo" className="w-9 h-9 md:w-10 md:h-10 object-contain shrink-0" onError={(e) => { e.target.style.display = 'none' }} />
+          <img src="/logo.svg" alt="Logo" className="w-10 h-10 object-contain shrink-0" onError={(e) => { e.target.style.display = 'none' }} />
           
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex items-center gap-2">
-              <span className="hidden xs:block text-[10px] md:text-xs text-zinc-400 font-medium">Welcome Back,</span>
+              <span className="text-[10px] md:text-xs text-zinc-400 font-medium">Welcome Back,</span>
               {isAuthenticated && autoDeleteEnabled && (
-                <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide">
+                <div className="hidden md:flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide">
                   <FaUserShield size={8} />
                   <span>Auto-Delete</span>
                 </div>
               )}
             </div>
-            <span className="text-sm md:text-xl font-bold text-zinc-900 tracking-tight truncate max-w-[150px] md:max-w-none">
+            <span className="text-md md:text-xl font-bold text-zinc-900 tracking-tight truncate max-w-[150px] md:max-w-none">
               {currentUser || "Guest"}.
             </span>
           </div>

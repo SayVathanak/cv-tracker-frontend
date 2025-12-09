@@ -56,7 +56,7 @@ const ControlPanel = ({
       <div className="flex gap-2">
         <div className="relative flex-1">
           <FaSearch className="absolute left-2.5 top-2.5 text-zinc-400" size={10} />
-          <input type="text" placeholder="Search name, phone, school..." className="w-full pl-8 pr-2 h-8 bg-white border border-zinc-200 rounded text-xs font-medium focus:border-black focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Search name, phone, role..." className="w-full pl-8 pr-2 h-8 bg-white border border-zinc-200 rounded text-[10px] md:text-xs focus:border-black focus:ring-1 focus:ring-black outline-none transition placeholder:text-zinc-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <div className="relative w-28">
           <select className="w-full h-8 pl-2 pr-6 bg-white border border-zinc-200 rounded text-xs font-medium text-zinc-600 outline-none cursor-pointer focus:border-black appearance-none" value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
