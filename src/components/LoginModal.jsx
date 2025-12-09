@@ -31,7 +31,7 @@ const LoginModal = ({ onClose, onSuccess, API_URL }) => {
         onSuccess(res.data.access_token, username)
       }
     } catch (err) {
-      if (isRegistering) setError(err.response?.data?.detail || "Registration failed.")
+      if (isRegistering) setError(err.response?.data?.detail || "Registration failed. Please try signing up with Google.")
       else setError("Invalid username or password")
     } finally {
       setLoading(false)
