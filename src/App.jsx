@@ -18,6 +18,8 @@ import PDFViewer from './components/PDFViewer'
 import EditForm from './components/EditForm'
 import LoginModal from './components/LoginModal'
 import SkeletonLoader from './components/SkeletonLoader'
+import CreditModal from './components/CreditModal';
+import UploadModal from './components/UploadModal';
 
 // Utils
 import { getUserFromToken, formatDOB } from './utils/helpers'
@@ -44,6 +46,9 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [batchStats, setBatchStats] = useState({ total: 0, processed: 0, active: false });
   const [filters, setFilters] = useState({ location: "", position: "", education: "", gender: "" });
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState(() => {
     const saved = localStorage.getItem('cv_app_settings');
@@ -92,8 +97,6 @@ function App() {
   const [credits, setCredits] = useState(0);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-
-  useEffect(() => { fetchCandidates(1) }, [])
 
   const fetchCredits = async () => {
     try {
@@ -249,6 +252,11 @@ function App() {
   }
 
   const fetchCandidates = async (page = 1, search = searchTerm) => {
+    // 1. ADD THIS GUARD CLAUSE
+    if (!isAuthenticated && !localStorage.getItem("cv_token")) {
+      return; // Stop here. Don't call the API if we aren't logged in.
+    }
+
     setLoading(true)
     try {
       const res = await axios.get(`${API_URL}/candidates`, {
@@ -259,7 +267,12 @@ function App() {
       setTotalItems(res.data.total)
       setTotalPages(Math.ceil(res.data.total / res.data.limit))
     } catch (error) {
-      console.error(error)
+      // 2. OPTIONAL: Handle expired session automatically
+      if (error.response && error.response.status === 401) {
+        handleLogout(); // Log the user out if their token is invalid
+      } else {
+        console.error(error)
+      }
     } finally {
       setLoading(false)
     }
@@ -319,267 +332,107 @@ function App() {
     if (input) input.value = ""
   }
 
-  // --- ADD THIS FUNCTION TO APP.JSX ---
-  const handleBuyCredits = async (packageId) => {
-    // 1. Show loading immediately
-    MySwal.fire({
-      title: 'Generating Payment...',
-      didOpen: () => MySwal.showLoading(),
-      allowOutsideClick: false
-    });
-
-    try {
-      // 2. Request QR from Backend
-      const res = await axios.post(`${API_URL}/api/create-payment`, {
-        package_id: packageId,
-        email: currentUser // Uses the currentUser state from App.jsx
-      });
-
-      const { qr_code, md5, amount } = res.data;
-
-      // 3. Show QR Code & Start Polling
-      let checkInterval;
-      
-      await MySwal.fire({
-        title: 'Scan with Bakong/ABA',
-        html: `
-          <div style="text-align: center;">
-            <p style="margin-bottom: 15px; font-size: 16px;">
-               Total Amount: <span style="font-weight: bold; color: #10b981; font-size: 18px;">$${amount}</span>
-            </p>
-            
-            <div style="display: flex; justify-content: center; margin-bottom: 15px;">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qr_code)}" 
-                     alt="KHQR" 
-                     style="border: 2px solid #eee; padding: 10px; border-radius: 12px;" 
-                />
-            </div>
-            
-            <p style="font-size: 13px; color: #666; font-weight: 500;">
-              <span class="swal2-icon-info" style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #3b82f6; margin-right: 5px;"></span>
-              Waiting for payment confirmation...
-            </p>
-          </div>
-        `,
-        showConfirmButton: false, 
-        showCloseButton: true,
-        allowOutsideClick: false,
-        didOpen: () => {
-          // 4. START POLLING: Check status every 3 seconds
-          checkInterval = setInterval(async () => {
-            try {
-              const checkRes = await axios.post(`${API_URL}/api/check-payment-status?md5_hash=${md5}`);
-              
-              if (checkRes.data.status === 'PAID') {
-                clearInterval(checkInterval);
-                
-                // 5. Success!
-                MySwal.fire({
-                  icon: 'success',
-                  title: 'Payment Successful!',
-                  text: `+${checkRes.data.new_credits} Credits added!`,
-                  timer: 3000,
-                  showConfirmButton: false
-                });
-                
-                // Refresh credits in App state
-                fetchCredits(); 
-              }
-            } catch (err) {
-              console.error("Checking payment...", err);
-            }
-          }, 3000);
-        },
-        willClose: () => {
-          clearInterval(checkInterval);
-        }
-      });
-
-    } catch (error) {
-      console.error("Payment Error", error);
-      MySwal.fire({
-        icon: 'error',
-        title: 'Payment Failed',
-        text: error.response?.data?.detail || 'Could not generate QR code.'
-      });
-    }
+  const handleBuyCredits = () => {
+    setShowCreditModal(true);
   };
 
   const handleUpload = async () => {
     if (!checkAuth()) return;
     
     if (files.length === 0) {
-      Toast.fire({ icon: 'warning', title: 'Please select files first' })
-      return
+      Toast.fire({ icon: 'warning', title: 'Please select files first' });
+      return;
     }
 
-    setIsUploading(true)
-    setUploadProgress(0)
-    setStatus("Uploading...")
+    // --- FIX STARTS HERE: Pre-validate credits to prevent UI flickering ---
+    // We assume 1 credit per file. If your logic is different, adjust the condition.
+    if (credits < files.length) {
+      MySwal.fire({
+        icon: 'error',
+        title: 'Insufficient Credits',
+        text: `You have ${credits} credits, but you are trying to upload ${files.length} files.`,
+        showCancelButton: true,
+        confirmButtonText: 'Top Up Now',
+        confirmButtonColor: '#000'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          setShowCreditModal(true);
+        }
+      });
+      return; // Stop execution here so Upload Modal never opens
+    }
+    // --- FIX ENDS HERE ---
 
-    const formData = new FormData()
+    // Reset upload state and open modal
+    setUploadError(null);
+    setUploadProgress(0);
+    setStatus("Preparing files...");
+    setIsUploading(true);
+    setShowUploadModal(true);
+
+    const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i])
+        formData.append('files', files[i]);
     }
 
     try {
       const res = await axios.post(`${API_URL}/upload-cv`, formData, {
-        headers: { 
-            'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
-          const rawPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          setUploadProgress(Math.min(rawPercent, 90))
+          const rawPercent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(Math.min(rawPercent, 95)); 
         }
-      })
+      });
 
-      // --- SUCCESS HANDLING ---
-      setUploadProgress(100)
-      setStatus("Finalizing...")
-      fetchCredits(); 
-
-      const count = res.data.details.length
-      const secondsPerCv = 15
-      const totalSeconds = count * secondsPerCv
-      let timeMsg = totalSeconds < 60 ? `~${totalSeconds} seconds` : `~${Math.ceil(totalSeconds / 60)} minutes`
-
+      // Success
+      setUploadProgress(100);
+      const count = res.data.details.length;
+      setStatus(`Successfully uploaded ${count} files. Processing started.`);
+      
+      // Update credits immediately
+      fetchCredits();
+      
       setTimeout(() => {
-        setIsUploading(false)
-        setStatus(`Done. ${count} uploaded.`)
-        
-        MySwal.fire({
-          icon: 'success',
-          title: 'Upload Complete',
-          html: `
-            <div style="font-size: 14px; color: #555;">
-              <strong>${count}</strong> files are being processed in the background.<br/>
-              <div style="margin-top: 8px; padding: 8px; background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; color: #b45309; font-weight: bold;">
-                <i class="fas fa-clock"></i> Estimated time: ${timeMsg}
-              </div>
-            </div>
-          `,
-          timer: 6000,
-          showConfirmButton: true
-        })
-        
-        fetchCandidates()
-        handleClearFiles()
-      }, 1000)
+        handleClearFiles();
+        fetchCandidates();
+        setIsUploading(false); 
+      }, 1000);
 
     } catch (error) {
-      console.error("Upload Error:", error)
-      setIsUploading(false)
-      setStatus("Upload failed.")
-
+      console.error("Upload Error:", error);
+      setIsUploading(false);
+      
       let serverMsg = "An unexpected error occurred.";
-      if (error.response && error.response.data) {
-          if (error.response.data.detail) serverMsg = error.response.data.detail;
-          else if (error.response.data.message) serverMsg = error.response.data.message;
-      }
+      // Fixed variable shadowing: renamed 'status' to 'errStatus' to avoid conflict with state variable
+      const errStatus = error.response?.status;
+      
+      if (error.response?.data?.detail) serverMsg = error.response.data.detail;
 
-      if (error.response) {
-        const status = error.response.status;
-
-        // === 402: INSUFFICIENT CREDITS (NEW UI) ===
-        if (status === 402) {
-            MySwal.fire({
-                // 1. Custom Icon & Message
-                html: `
-                    <div class="flex flex-col items-center">
-                        <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4">
-                            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        </div>
-                        <h3 class="text-xl font-bold text-zinc-900 mb-2">Insufficient Credits</h3>
-                        <p class="text-sm text-zinc-500 text-center leading-relaxed px-4 mb-2">
-                            ${serverMsg}
-                        </p>
-                    </div>
-                `,
-                showConfirmButton: true,
-                confirmButtonText: 'Top Up Now',
-                showCancelButton: true,
-                cancelButtonText: 'Cancel',
-                customClass: {
-                    popup: 'rounded-2xl p-6',
-                    confirmButton: 'bg-black text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg hover:bg-zinc-800 border-none',
-                    cancelButton: 'bg-white text-zinc-500 px-6 py-3 rounded-xl font-bold text-sm hover:bg-zinc-50 border border-zinc-200'
-                },
-                buttonsStyling: false
-            }).then(async (result) => {
-                if (result.isConfirmed) {
-                    
-                    // === 2. PACKAGE SELECTION (PRICING CARDS UI) ===
-                    const { value: selectedPackage } = await MySwal.fire({
-                        title: '<span class="text-lg font-bold text-zinc-900">Select Credit Package</span>',
-                        // HERE IS THE GRID WITH THE GAP-4 (You can change to gap-6 for more space)
-                        html: `
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 px-2">
-                                
-                                <div id="pkg-small" class="cursor-pointer group relative border-2 border-zinc-200 rounded-2xl p-5 hover:border-zinc-400 transition-all text-left bg-white">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <span class="text-xs font-bold uppercase text-zinc-400 tracking-wider">Starter</span>
-                                        <div class="w-5 h-5 rounded-full border-2 border-zinc-300 group-hover:border-black flex items-center justify-center">
-                                            <div class="w-2.5 h-2.5 rounded-full bg-black opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                        </div>
-                                    </div>
-                                    <div class="text-2xl font-bold text-zinc-900">$1.00</div>
-                                    <div class="text-xs font-bold text-zinc-400 mt-1">20 Credits</div>
-                                </div>
-
-                                <div id="pkg-pro" class="cursor-pointer group relative border-2 border-black bg-zinc-50 rounded-2xl p-5 shadow-sm text-left ring-1 ring-black/5">
-                                    <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-black text-white text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-md">
-                                        Best Value
-                                    </div>
-                                    <div class="flex justify-between items-start mb-2">
-                                        <span class="text-xs font-bold uppercase text-zinc-900 tracking-wider">Pro Pack</span>
-                                        <div class="w-5 h-5 rounded-full border-2 border-black flex items-center justify-center">
-                                            <div class="w-2.5 h-2.5 rounded-full bg-black"></div>
-                                        </div>
-                                    </div>
-                                    <div class="text-2xl font-bold text-zinc-900">$5.00</div>
-                                    <div class="text-xs font-bold text-green-600 mt-1">150 Credits</div>
-                                </div>
-
-                            </div>
-                            <p class="text-[10px] text-zinc-400 mt-6 text-center">
-                                <i class="fas fa-lock"></i> Secure payment via KHQR (ABA / Bakong)
-                            </p>
-                        `,
-                        showConfirmButton: false, 
-                        showCloseButton: true,
-                        customClass: { popup: 'rounded-2xl w-full max-w-xl' },
-                        didOpen: () => {
-                            // Make the divs clickable!
-                            document.getElementById('pkg-small').addEventListener('click', () => {
-                                MySwal.clickConfirm(); handleBuyCredits('small');
-                            });
-                            document.getElementById('pkg-pro').addEventListener('click', () => {
-                                MySwal.clickConfirm(); handleBuyCredits('pro');
-                            });
-                        }
-                    });
-                }
-            });
-        } 
-        else if (status === 401) {
-            Toast.fire({ icon: 'error', title: 'Session Expired', text: 'Please login again.' })
-            handleLogout()
-        } 
-        else if (status === 413) {
-            Toast.fire({ icon: 'error', title: 'Files Too Large', text: 'Max 5MB per file.' })
-        } 
-        else {
-            Toast.fire({ icon: 'error', title: 'Upload Failed', text: serverMsg })
-        }
+      // Handle Specific Errors
+      if (errStatus === 402) {
+        // Fallback: If local check failed but server still says 402
+        setShowUploadModal(false);
+        
+        MySwal.fire({
+          icon: 'error',
+          title: 'Insufficient Credits',
+          text: serverMsg,
+          showCancelButton: true,
+          confirmButtonText: 'Top Up Now',
+          confirmButtonColor: '#000'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            setShowCreditModal(true);
+          }
+        });
+        return; 
       } 
-      else if (error.request) {
-        Toast.fire({ icon: 'error', title: 'Network Error', text: 'Check your internet connection.' })
-      } 
-      else {
-        Toast.fire({ icon: 'error', title: 'Error', text: error.message })
-      }
+      
+      // Generic Error display in the modal
+      setUploadError(serverMsg);
+      setStatus("Upload Failed");
     }
-  }
+  };
 
   const handleCardClick = useCallback((person) => {
     if (selectMode) {
@@ -837,7 +690,7 @@ function App() {
       onDragOver={handleGlobalDragOver}
       onDragLeave={handleGlobalDragLeave}
       onDrop={handleGlobalDrop}
-      className="flex flex-col h-screen bg-white text-black font-sans selection:bg-black selection:text-white overflow-hidden select-none relative"
+      className="flex flex-col h-screen bg-white text-black font-sans selection:bg-zinc-800 selection:text-white overflow-hidden select-none relative"
     >
       <AnimatePresence>
         {isDragging && (
@@ -870,6 +723,7 @@ function App() {
         onOpenSettings={() => setShowSettings(true)}
         autoDeleteEnabled={appSettings.autoDelete}
         credits={credits}
+        onBuyCredits={handleBuyCredits}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
@@ -1086,6 +940,24 @@ function App() {
           API_URL={API_URL}
         />
       )}
+
+      <UploadModal 
+        isOpen={showUploadModal}
+        progress={uploadProgress}
+        status={status}
+        error={uploadError}
+        onClose={() => setShowUploadModal(false)}
+        fileCount={files.length}
+      />
+
+      <CreditModal 
+        isOpen={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+        onSuccess={() => fetchCredits()}
+        userEmail={currentUser}
+        apiUrl={API_URL}
+      />
+
     </div>
   )
 }

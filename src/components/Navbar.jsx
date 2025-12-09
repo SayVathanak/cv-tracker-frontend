@@ -4,17 +4,17 @@ import {
   FaUserShield, FaDownload, FaChevronDown, FaCog, 
   FaSignOutAlt, FaBars, FaTimes, FaUser 
 } from 'react-icons/fa'
-import CreditBadge from './CreditBadge' // You already have this
+import CreditBadge from './CreditBadge'
 
 const Navbar = ({
   deferredPrompt, handleInstallClick, isAuthenticated, setShowLoginModal,
-  handleLogout, currentUser, onOpenSettings, autoDeleteEnabled, credits
+  handleLogout, currentUser, onOpenSettings, autoDeleteEnabled, credits,
+  onBuyCredits // 1. ADD THIS to the props list
 }) => {
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const userInitial = (currentUser && currentUser.length > 0) ? currentUser.charAt(0).toUpperCase() : "?"
 
-  // --- MENU ANIMATIONS ---
   const menuVariants = {
     closed: {
       x: "100%",
@@ -65,7 +65,9 @@ const Navbar = ({
         {isAuthenticated ? (
           <>
             <div className="hidden md:flex items-center gap-3">
-              <CreditBadge credits={credits} onClick={onOpenSettings} />
+              {/* 2. UPDATE THIS: Use onBuyCredits instead of onOpenSettings */}
+              <CreditBadge credits={credits} onClick={onBuyCredits} />
+              
               <div className="relative">
                 <button onClick={() => setShowMenu(!showMenu)} className="flex items-center gap-1.5 outline-none group">
                   <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-600 group-hover:bg-zinc-200 group-hover:text-black transition">
@@ -92,7 +94,7 @@ const Navbar = ({
                           <FaCog className="text-zinc-400" /> Settings
                         </button>
                         <div className="h-px bg-zinc-100 my-1"></div>
-                        <button onClick={() => { setShowMenu(false); handleLogout(); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left">
+                        <button onClick={() => { setShowMenu(false); handleLogout(); window.location.reload(); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left">
                           <FaSignOutAlt /> Sign Out
                         </button>
                       </motion.div>
@@ -139,7 +141,10 @@ const Navbar = ({
                         <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mb-1">Available Credits</p>
                         <div className="flex justify-between items-end">
                           <span className="text-3xl font-bold">{credits}</span>
-                          <button onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} className="text-[10px] font-bold bg-white text-black px-2 py-1 rounded">ADD MORE</button>
+                          
+                          {/* 3. UPDATE THIS: Use onBuyCredits here too */}
+                          <button onClick={() => { setShowMobileMenu(false); onBuyCredits(); }} className="text-[10px] font-bold bg-white text-black px-2 py-1 rounded">ADD MORE</button>
+                        
                         </div>
                       </motion.div>
 
@@ -155,7 +160,7 @@ const Navbar = ({
                     </div>
 
                     <motion.div variants={itemVariants} className="p-6 border-t border-zinc-100">
-                      <button onClick={() => { setShowMobileMenu(false); handleLogout(); }} className="w-full flex items-center justify-center gap-2 px-4 py-4 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 rounded-xl transition">
+                      <button onClick={() => { setShowMobileMenu(false); handleLogout(); window.location.reload(); }} className="w-full flex items-center justify-center gap-2 px-4 py-4 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 rounded-xl transition">
                         <FaSignOutAlt /> Sign Out
                       </button>
                     </motion.div>
