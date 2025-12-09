@@ -56,7 +56,7 @@ const LoginModal = ({ onClose, onSuccess, API_URL }) => {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <div className="fixed inset-0 z-999 flex items-center justify-center p-4 bg-zinc-100/60 backdrop-blur-md select-none">
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ duration: 0.2 }} className="bg-white w-full max-w-[420px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] overflow-hidden relative border border-white">
-          <div className="absolute top-[-50px] left-1/2 -translate-x-1/2 w-40 h-40 bg-green-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+          <div className="absolute -top-5 -left-5 w-40 h-40 bg-blue-200/30 blur-[50px] rounded-full pointer-events-none"></div>
           <button onClick={onClose} className="absolute top-5 right-5 text-zinc-400 hover:text-black transition z-10"><BsXLg size={14} /></button>
           <div className="p-8 relative z-0">
             <div className="text-center mb-8">
