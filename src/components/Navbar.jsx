@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion' //
-import { 
-  FaUserShield, FaDownload, FaChevronDown, FaCog, 
-  FaSignOutAlt, FaBars, FaTimes, FaWallet
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  FaUserShield, FaDownload, FaChevronDown, FaCog,
+  FaSignOutAlt, FaBars, FaTimes, FaWallet, FaLock
 } from 'react-icons/fa'
-import CreditBadge from './CreditBadge' //
+import CreditBadge from './CreditBadge'
+
+const ADMIN_EMAIL = "saksovathanaksay@gmail.com";
 
 const Navbar = ({
   deferredPrompt, handleInstallClick, isAuthenticated, setShowLoginModal,
-  handleLogout, currentUser, onOpenSettings, autoDeleteEnabled, credits,
-  onBuyCredits 
+  handleLogout, currentUser, userEmail, onOpenSettings, onOpenAdmin, autoDeleteEnabled, credits,
+  onBuyCredits
 }) => {
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
@@ -28,11 +30,11 @@ const Navbar = ({
   return (
     <>
       <nav className="flex-none h-16 px-4 md:px-6 border-b border-zinc-100 bg-white/80 backdrop-blur-md flex items-center justify-between z-40 sticky top-0 select-none">
-        
+
         {/* --- LEFT: Logo & User Info --- */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <img src="/logo.svg" alt="Logo" className="w-10 h-10 object-contain shrink-0" onError={(e) => { e.target.style.display = 'none' }} />
-          
+
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[10px] md:text-xs text-zinc-400 font-medium">Welcome Back,</span>
@@ -51,7 +53,7 @@ const Navbar = ({
 
         {/* --- RIGHT: Actions --- */}
         <div className="flex items-center gap-3 shrink-0">
-          
+
           {/* Desktop Install Button */}
           {deferredPrompt && (
             <button onClick={handleInstallClick} className="hidden lg:flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 rounded-lg text-[11px] font-bold uppercase hover:bg-blue-100 transition">
@@ -64,7 +66,7 @@ const Navbar = ({
               {/* --- DESKTOP MENU --- */}
               <div className="hidden md:flex items-center gap-4">
                 <CreditBadge credits={credits} onClick={onBuyCredits} />
-                
+
                 <div className="relative">
                   <button onClick={() => setShowMenu(!showMenu)} className="flex items-center gap-2 outline-none group p-1 rounded-full hover:bg-zinc-50 transition">
                     <div className="w-9 h-9 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-700">
@@ -93,9 +95,21 @@ const Navbar = ({
                             <p className="text-[10px] font-bold text-zinc-400 uppercase">Signed in as</p>
                             <p className="text-sm font-bold text-zinc-900 truncate">{currentUser}</p>
                           </div>
+
+                          {/* --- ADMIN BUTTON (DESKTOP) --- */}
+                          {userEmail === ADMIN_EMAIL && (
+                            <button
+                              onClick={() => { setShowMenu(false); onOpenAdmin(); }}
+                              className="w-full flex items-center gap-3 px-5 py-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left"
+                            >
+                              <FaLock /> Admin Panel
+                            </button>
+                          )}
+
                           <button onClick={() => { setShowMenu(false); onOpenSettings(); }} className="w-full flex items-center gap-3 px-5 py-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition text-left">
                             <FaCog /> Settings
                           </button>
+
                           <button onClick={() => { setShowMenu(false); handleLogout(); window.location.reload(); }} className="w-full flex items-center gap-3 px-5 py-3 text-xs font-medium text-red-600 hover:bg-red-50 transition text-left">
                             <FaSignOutAlt /> Sign Out
                           </button>
@@ -107,15 +121,15 @@ const Navbar = ({
               </div>
 
               {/* --- MOBILE ITEMS --- */}
-              
+
               {/* 1. Mobile Credits Display (Near Hamburger) */}
               <div className="md:hidden flex items-center">
-                 <CreditBadge credits={credits} onClick={onBuyCredits} />
+                <CreditBadge credits={credits} onClick={onBuyCredits} />
               </div>
 
               {/* 2. Mobile Menu Button (Hamburger) */}
-              <button 
-                onClick={() => setShowMobileMenu(true)} 
+              <button
+                onClick={() => setShowMobileMenu(true)}
                 className="md:hidden p-2 text-zinc-600 hover:bg-zinc-100 rounded-lg transition"
               >
                 <FaBars size={20} />
@@ -142,8 +156,8 @@ const Navbar = ({
             {/* Header */}
             <div className="flex items-center justify-between px-6 h-16 border-b border-zinc-100">
               <span className="text-lg font-bold text-black">Menu</span>
-              <button 
-                onClick={() => setShowMobileMenu(false)} 
+              <button
+                onClick={() => setShowMobileMenu(false)}
                 className="p-2 bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200"
               >
                 <FaTimes size={16} />
@@ -152,7 +166,7 @@ const Navbar = ({
 
             {/* Content */}
             <div className="flex-1 p-6 flex flex-col gap-4">
-              
+
               {/* User Profile Summary */}
               <div className="flex items-center gap-3 pb-6 border-b border-zinc-100">
                 <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center text-lg font-bold text-zinc-600">
@@ -164,22 +178,32 @@ const Navbar = ({
                 </div>
               </div>
 
-              {/* Credits Row in Menu (Optional: You can keep or remove this since it's now on the bar) */}
+              {/* Credits Row in Menu */}
               <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2 text-zinc-600 font-medium">
-                    <FaWallet className="text-zinc-400"/> Credits:
-                  </div>
-                  <button 
-                    onClick={() => { setShowMobileMenu(false); onBuyCredits(); }}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-black text-white rounded-md text-xs font-bold"
-                  >
-                    {credits} available <span className="opacity-50">|</span> + Add
-                  </button>
+                <div className="flex items-center gap-2 text-zinc-600 font-medium">
+                  <FaWallet className="text-zinc-400" /> Credits:
+                </div>
+                <button
+                  onClick={() => { setShowMobileMenu(false); onBuyCredits(); }}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-black text-white rounded-md text-xs font-bold"
+                >
+                  {credits} available <span className="opacity-50">|</span> + Add
+                </button>
               </div>
 
+              {/* --- ADMIN BUTTON (MOBILE) --- */}
+              {userEmail === ADMIN_EMAIL && (
+                <button
+                  onClick={() => { setShowMenu(false); onOpenAdmin(); }}
+                  className="flex items-center gap-3 py-3 text-base font-medium text-zinc-800 border-b border-zinc-50"
+                >
+                  <FaLock className="text-zinc-400" /> Admin Panel
+                </button>
+              )}
+
               {/* Settings */}
-              <button 
-                onClick={() => { setShowMobileMenu(false); onOpenSettings(); }} 
+              <button
+                onClick={() => { setShowMobileMenu(false); onOpenSettings(); }}
                 className="flex items-center gap-3 py-3 text-base font-medium text-zinc-800 border-b border-zinc-50"
               >
                 <FaCog className="text-zinc-400" /> Settings
@@ -187,8 +211,8 @@ const Navbar = ({
 
               {/* Install (Conditional) */}
               {deferredPrompt && (
-                <button 
-                  onClick={() => { setShowMobileMenu(false); handleInstallClick(); }} 
+                <button
+                  onClick={() => { setShowMobileMenu(false); handleInstallClick(); }}
                   className="flex items-center gap-3 py-3 text-base font-medium text-blue-600 border-b border-zinc-50"
                 >
                   <FaDownload /> Install App
@@ -196,8 +220,8 @@ const Navbar = ({
               )}
 
               <div className="mt-auto">
-                <button 
-                  onClick={() => { setShowMobileMenu(false); handleLogout(); window.location.reload(); }} 
+                <button
+                  onClick={() => { setShowMobileMenu(false); handleLogout(); window.location.reload(); }}
                   className="w-full flex items-center justify-center gap-2 py-4 text-red-600 font-bold bg-red-50 rounded-xl"
                 >
                   <FaSignOutAlt /> Sign Out

@@ -20,6 +20,7 @@ import LoginModal from './components/LoginModal'
 import SkeletonLoader from './components/SkeletonLoader'
 import CreditModal from './components/CreditModal';
 import UploadModal from './components/UploadModal';
+import AdminDashboard from './components/AdminDashboard';
 
 // Utils
 import { getUserFromToken, formatDOB } from './utils/helpers'
@@ -44,6 +45,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [batchStats, setBatchStats] = useState({ total: 0, processed: 0, active: false });
   const [filters, setFilters] = useState({ location: "", position: "", education: "", gender: "" });
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -730,10 +732,12 @@ function App() {
             ? appSettings.profile.displayName
             : currentUser
         }
+        userEmail={currentUser}
         isAuthenticated={isAuthenticated}
         setShowLoginModal={setShowLoginModal}
         handleLogout={handleLogout}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenAdmin={() => setShowAdminPanel(true)}
         autoDeleteEnabled={appSettings.autoDelete}
         credits={credits}
         onBuyCredits={handleBuyCredits}
@@ -952,6 +956,10 @@ function App() {
           onSuccess={handleLoginSuccess}
           API_URL={API_URL}
         />
+      )}
+
+      {showAdminPanel && (
+        <AdminDashboard onClose={() => setShowAdminPanel(false)} />
       )}
 
       <UploadModal
