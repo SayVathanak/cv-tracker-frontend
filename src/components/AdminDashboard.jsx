@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaCheck, FaTimes, FaSyncAlt, FaExternalLinkAlt,
-  FaUsers, FaMoneyBillWave, FaChartLine, FaBars,
+  FaUsers, FaCoins, FaChartLine, FaBars,
   FaSignOutAlt, FaTachometerAlt, FaList, FaServer,
   FaExclamationTriangle, FaBan, FaUnlock, FaRedo, FaFileAlt
 } from 'react-icons/fa';
@@ -193,8 +193,10 @@ const AdminDashboard = ({ onClose }) => {
         className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-zinc-200 md:relative md:translate-x-0 flex flex-col`}
       >
         <div className="p-8 pb-4 flex justify-between items-center">
-
-          <h1 className="text-xl font-bold text-zinc-900">Admin<span className="text-emerald-500">.</span></h1>
+          <div className='flex items-center gap-3'>
+            <img src="/logo.svg" alt="Logo" className="w-10 h-10 object-contain shrink-0" onError={(e) => { e.target.style.display = 'none' }} />
+            <h1 className="text-xl font-bold text-zinc-900">Admin<span className="text-emerald-500">.</span></h1>
+          </div>
           <button onClick={() => setSidebarOpen(false)} className="md:hidden text-zinc-400"><FaTimes /></button>
         </div>
 
@@ -234,7 +236,7 @@ const AdminDashboard = ({ onClose }) => {
               {activeTab === 'dashboard' && (
                 <motion.div key="dashboard" variants={containerVariants} initial="hidden" animate="visible" exit={{ opacity: 0 }} className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <StatCard icon={FaMoneyBillWave} label="Total Revenue" value={`$${stats?.revenue || 0}`} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
+                    <StatCard icon={FaCoins} label="Total Revenue" value={`$${stats?.revenue || 0}`} bgColor="bg-emerald-50" iconColor="text-emerald-600" />
                     <StatCard icon={FaList} label="Pending Reviews" value={stats?.pending_reviews || 0} bgColor="bg-orange-50" iconColor="text-orange-500" />
                     <StatCard icon={FaChartLine} label="Files Processed" value={stats?.total_files_parsed || 0} bgColor="bg-blue-50" iconColor="text-blue-600" />
                   </div>
@@ -297,7 +299,45 @@ const AdminDashboard = ({ onClose }) => {
               {/* === USERS MANAGEMENT === */}
               {activeTab === 'users' && (
                 <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                  <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+
+                  {/* --- MOBILE VIEW: CARDS (Visible on small screens) --- */}
+                  <div className="block md:hidden space-y-3">
+                    {users.map(user => (
+                      <div key={user.id} className={`p-4 rounded-xl border shadow-sm transition-colors ${!user.is_active ? 'bg-red-50/50 border-red-100' : 'bg-white border-zinc-200'}`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-bold text-zinc-900 text-sm">{user.username}</div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">Joined: {new Date(user.joined_at).toLocaleDateString()}</div>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {user.is_active ? 'Active' : 'Banned'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mb-4 bg-zinc-50 p-2 rounded-lg">
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600">
+                            <FaCoins size={12} /> {user.credits} Credits
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
+                            <FaFileAlt size={12} /> {user.uploads} Uploads
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleToggleUser(user)}
+                          className={`w-full py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${user.is_active
+                            ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
+                            : 'border-green-200 text-green-600 bg-white hover:bg-green-50'
+                            }`}
+                        >
+                          {user.is_active ? <><FaBan /> Ban User</> : <><FaUnlock /> Unban User</>}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* --- DESKTOP VIEW: TABLE (Hidden on small screens) --- */}
+                  <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-zinc-50 text-zinc-500 font-medium border-b border-zinc-100">
                         <tr>
@@ -319,7 +359,7 @@ const AdminDashboard = ({ onClose }) => {
                             <td className="px-6 py-4 text-zinc-500">{new Date(user.joined_at).toLocaleDateString()}</td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-4 text-xs font-medium">
-                                <span className="flex items-center gap-1 text-blue-600"><FaMoneyBillWave /> {user.credits} Credits</span>
+                                <span className="flex items-center gap-1 text-blue-600"><FaCoins /> {user.credits} Credits</span>
                                 <span className="flex items-center gap-1 text-purple-600"><FaFileAlt /> {user.uploads} Uploads</span>
                               </div>
                             </td>

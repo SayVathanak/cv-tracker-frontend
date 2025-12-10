@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FaTimes, FaCheck, FaBuilding, FaUserTie, FaShieldAlt, FaArrowLeft, FaUpload, FaSpinner, FaCloudUploadAlt } from 'react-icons/fa';
+import { FaTimes, FaCheck, FaBuilding, FaUserTie, FaShieldAlt, FaArrowLeft, FaUpload, FaSpinner, FaCloudUploadAlt, FaCrown } from 'react-icons/fa';
 import QRCode from "react-qr-code";
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -156,54 +156,76 @@ const CreditModal = ({ isOpen, onClose, onSuccess, userEmail }) => {
                     initial="hidden"
                     animate="visible"
                     exit="exit"
-                    className="space-y-4 pt-2"
+                    className="space-y-3 pt-2"
                   >
-                    <p className="text-sm text-zinc-500 font-medium">Select a credit package.</p>
+                    <p className="text-sm text-zinc-500 font-medium mb-2">Select a credit package.</p>
 
-                    {/* Starter Pack */}
+                    {/* 1. Mini ($0.25) */}
                     <div
-                      onClick={() => !loading && handleSelectPackage('small')}
-                      className={`group relative p-5 rounded-2xl border-2 border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                      onClick={() => !loading && handleSelectPackage('mini')}
+                      className={`group relative p-4 rounded-2xl border-2 border-zinc-100 hover:border-zinc-300 hover:bg-zinc-50 cursor-pointer transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-center">
                         <div className="flex items-center gap-3">
                            <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 group-hover:bg-white group-hover:shadow-sm transition-all">
                               <FaUserTie size={16} />
                            </div>
                            <div>
-                              <h3 className="font-bold text-zinc-900 leading-tight">Starter Pack</h3>
-                              <p className="text-xs text-zinc-500 mt-0.5">Perfect for single hires.</p>
+                              <h3 className="font-bold text-zinc-900 leading-tight">Mini</h3>
+                              <p className="text-xs text-zinc-500 mt-0.5">Quick try. Impulse buy.</p>
                            </div>
                         </div>
                         <div className="text-right">
-                          <span className="block text-xl font-bold text-zinc-900 tracking-tight">$1.00</span>
-                          <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">20 CREDITS</span>
+                          <span className="block text-lg font-bold text-zinc-900 tracking-tight">$0.25</span>
+                          <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 px-2 py-1 rounded-md">15 CREDITS</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Agency Pro */}
+                    {/* 2. Standard ($1.50) */}
                     <div
-                      onClick={() => !loading && handleSelectPackage('pro')}
-                      className={`group relative p-5 rounded-2xl bg-zinc-900 text-white cursor-pointer shadow-xl hover:shadow-2xl hover:scale-[1.01] transition-all duration-300 ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                      onClick={() => !loading && handleSelectPackage('standard')}
+                      className={`group relative p-4 rounded-2xl border-2 border-blue-50 bg-blue-50/20 hover:border-blue-200 hover:bg-blue-50/50 cursor-pointer transition-all ${loading ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <div className="absolute -top-3 right-4 bg-linear-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full shadow-lg border border-blue-400/30">
-                        Most Popular
-                      </div>
-
-                      <div className="flex justify-between items-start">
-                         <div className="flex items-center gap-3">
-                           <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-blue-200 group-hover:bg-white/20 transition-all">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500 group-hover:bg-white group-hover:shadow-sm transition-all">
                               <FaBuilding size={16} />
                            </div>
                            <div>
-                              <h3 className="font-bold text-white leading-tight">Agency Pro</h3>
+                              <h3 className="font-bold text-zinc-900 leading-tight">Standard</h3>
+                              <p className="text-xs text-zinc-500 mt-0.5">For active job hunters.</p>
+                           </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="block text-lg font-bold text-zinc-900 tracking-tight">$1.50</span>
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-md">100 CREDITS</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Max ($5.00) */}
+                    <div
+                      onClick={() => !loading && handleSelectPackage('max')}
+                      className={`group relative p-4 rounded-2xl bg-zinc-900 text-white cursor-pointer shadow-xl hover:shadow-2xl hover:scale-[1.01] transition-all duration-300 ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      <div className="absolute -top-3 right-4 bg-linear-to-r from-yellow-400 to-yellow-600 text-white text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full shadow-lg border border-yellow-300/30">
+                        Best Value
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                         <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-yellow-300 group-hover:bg-white/20 transition-all">
+                              <FaCrown size={16} />
+                           </div>
+                           <div>
+                              <h3 className="font-bold text-white leading-tight">Max Power</h3>
                               <p className="text-xs text-zinc-400 mt-0.5 group-hover:text-zinc-300">Volume hiring & export.</p>
                            </div>
                         </div>
                         <div className="text-right">
-                          <span className="block text-xl font-bold text-white tracking-tight">$5.00</span>
-                          <span className="text-[10px] font-bold text-zinc-900 bg-white px-2 py-1 rounded-md shadow-sm">150 CREDITS</span>
+                          <span className="block text-lg font-bold text-white tracking-tight">$5.00</span>
+                          <span className="text-[10px] font-bold text-zinc-900 bg-white px-2 py-1 rounded-md shadow-sm">400 CREDITS</span>
                         </div>
                       </div>
                     </div>

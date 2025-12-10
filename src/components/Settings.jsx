@@ -7,7 +7,7 @@ import withReactContent from 'sweetalert2-react-content';
 import {
     FaUserShield, FaFileExcel, FaCloudUploadAlt,
     FaSave, FaTrash, FaCheck, FaUser, FaCreditCard,
-    FaTimes, FaArrowLeft, FaChevronRight, FaHistory, FaBolt, FaSync, FaSpinner, FaFileUpload
+    FaTimes, FaArrowLeft, FaChevronRight, FaHistory, FaBolt, FaSync, FaSpinner, FaFileUpload, FaUserTie, FaBuilding, FaCrown
 } from 'react-icons/fa';
 
 const MySwal = withReactContent(Swal);
@@ -29,7 +29,6 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
 
     const [credits, setCredits] = useState(currentCredits || 0);
     const [qrData, setQrData] = useState(null);
-    // REMOVED: checkInterval state (No more polling)
 
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -48,8 +47,6 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         if (activeTab === 'billing') fetchUserCredits();
         if (activeTab === 'transactions') fetchTransactions();
     }, [activeTab]);
-
-    // REMOVED: useEffect for clearing interval
 
     // --- API CALLS ---
     const fetchUserCredits = async () => {
@@ -74,7 +71,17 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         try {
             const token = localStorage.getItem("cv_token");
             const res = await axios.get(`${API_URL}/admin/transactions`, { headers: { Authorization: `Bearer ${token}` } });
-            setTransactions(res.data);
+
+            // --- FIX 1: FILTER GHOST LOGS ---
+            // We only show transactions that have proof (VERIFYING), are done (COMPLETED), or REJECTED.
+            // PENDING ones (just clicking the package) are hidden.
+            const cleanList = res.data.filter(tx =>
+                tx.status === 'VERIFYING' ||
+                tx.status === 'COMPLETED' ||
+                tx.status === 'REJECTED'
+            );
+            setTransactions(cleanList);
+
         } catch (e) { console.error("Fetch error:", e); } finally { setLoading(false); }
     };
 
@@ -127,7 +134,6 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
 
             if (txContext.source === 'billing') {
                 setQrData(null);
-                // No interval to clear anymore
                 setActiveTab('transactions');
             } else {
                 fetchTransactions();
@@ -144,33 +150,19 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         }
     };
 
-    // --- PAYMENT LOGIC (Simplified) ---
+    // --- PAYMENT LOGIC ---
     const handleBuy = async (packageId) => {
         try {
             const res = await axios.post(`${API_URL}/api/create-payment`, { package_id: packageId, email: currentUserEmail });
             setQrData(res.data);
-            // REMOVED: startPolling(res.data.md5); 
-            // We now just wait for user to upload.
         } catch (error) {
             MySwal.fire({ icon: 'error', title: 'Connection Error', text: 'Could not generate QR code.' });
         }
     };
 
-    // REMOVED: startPolling function
+    // --- SETTINGS LOGIC ---
 
-    // ... (Helpers: handleClearHistory, handleSave, etc.)
-    const handleClearHistory = async () => {
-        const result = await MySwal.fire({
-            title: 'Clear History?', text: "This action cannot be undone.", icon: 'warning',
-            showCancelButton: true, confirmButtonColor: '#000', confirmButtonText: 'Yes, clear it'
-        });
-        if (result.isConfirmed) {
-            try {
-                await axios.delete(`${API_URL}/admin/transactions`);
-                fetchTransactions();
-            } catch (e) { MySwal.fire('Error', 'Failed to clear.', 'error'); }
-        }
-    };
+    // REMOVED: handleClearHistory (To protect Revenue Data)
 
     const handleToggleField = (field) => {
         setLocalSettings(prev => ({ ...prev, exportFields: { ...prev.exportFields, [field]: !prev.exportFields[field] } }));
@@ -244,7 +236,6 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                             <AnimatePresence mode="wait">
                                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="max-w-2xl mx-auto pb-10">
 
-                                    {/* ... Other Tabs (Account, Privacy, Parsing, Export) remain the same ... */}
                                     {activeTab === 'account' && (
                                         <div className="space-y-8">
                                             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -305,61 +296,90 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
 
                                     {/* --- BILLING --- */}
                                     {activeTab === 'billing' && (
-                                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-                                            <div className="relative overflow-hidden rounded-2xl bg-zinc-900 text-white p-5 sm:p-6 shadow-xl border border-zinc-800 group">
+                                        <div className="space-y-4 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+
+                                            {/* Balance Card */}
+                                            <div className="relative overflow-hidden rounded-2xl bg-zinc-900 text-white p-4 sm:p-6 shadow-xl border border-zinc-800 group">
                                                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -mr-16 -mt-32 transition-all duration-700 group-hover:bg-blue-600/30 pointer-events-none" />
-                                                <div className="relative z-10 flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0">
+                                                <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
                                                     <div>
                                                         <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 mb-1">Current Balance</h4>
-                                                        <div className="flex items-baseline gap-2"><span className="text-4xl font-bold tracking-tight text-white">{credits}</span><span className="text-sm font-medium text-zinc-500">credits</span></div>
+                                                        <div className="flex items-baseline gap-2">
+                                                            {/* Responsive Text Size */}
+                                                            <span className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{credits}</span>
+                                                            <span className="text-sm font-medium text-zinc-500">credits</span>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex gap-3">
-                                                        <button onClick={() => setActiveTab('transactions')} className="px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-bold transition flex items-center gap-2"><FaHistory /> History</button>
-                                                        <div className="hidden sm:flex px-4 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-bold items-center gap-2"><FaCheck size={10} /> Active</div>
+
+                                                    {/* Actions: Full width on mobile, auto on desktop */}
+                                                    <div className="flex w-full sm:w-auto gap-2 sm:gap-3">
+                                                        <button onClick={() => setActiveTab('transactions')} className="flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-bold transition flex items-center gap-2">
+                                                            <FaHistory /> History
+                                                        </button>
+                                                        <div className="hidden sm:flex px-4 py-2 rounded-lg bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-bold items-center gap-2">
+                                                            <FaCheck size={10} /> Active
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {qrData ? (
-                                                <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-lg flex flex-col md:flex-row">
-                                                    <div className="w-full md:w-1/2 p-6 flex flex-col justify-center bg-zinc-50 border-r border-zinc-100 relative">
-                                                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 animate-pulse" />
-                                                        <div className="mb-auto mt-2">
-                                                            <h3 className="text-xl font-bold text-zinc-900">Scan to Pay</h3>
-                                                            {/* Updated Instruction */}
-                                                            <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                                                <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden shadow-lg flex flex-col-reverse md:flex-row">
+
+                                                    {/* Left Side (Instructions) */}
+                                                    <div className="w-full md:w-1/2 p-5 sm:p-6 flex flex-col justify-center bg-zinc-50 border-t md:border-t-0 md:border-r border-zinc-100 relative">
+                                                        <div className="hidden md:block absolute top-0 left-0 w-1 h-full bg-blue-500 animate-pulse" />
+                                                        <div className="mb-6 mt-2">
+                                                            <h3 className="text-lg sm:text-xl font-bold text-zinc-900">Scan to Pay</h3>
+                                                            <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
                                                                 1. Scan QR with your banking app.<br />
                                                                 2. Save the receipt.<br />
                                                                 3. Upload it here to confirm.
                                                             </p>
                                                         </div>
-                                                        <div className="my-6">
+
+                                                        <div className="mb-6 flex justify-between items-center md:block">
                                                             <div className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Total Amount</div>
-                                                            <div className="text-4xl font-bold text-blue-600">${qrData.amount}</div>
+                                                            <div className="text-3xl sm:text-4xl font-bold text-blue-600">${qrData.amount}</div>
                                                         </div>
 
-                                                        <div className="space-y-2 mt-auto">
-                                                            {/* Primary Action is now Upload */}
+                                                        <div className="space-y-3 mt-auto">
                                                             <button
                                                                 onClick={handleBillingUploadClick}
                                                                 disabled={isUploading}
-                                                                className="w-full py-2.5 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-black text-white flex items-center justify-center gap-2 transition-all shadow-md"
+                                                                className="w-full py-3 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-black text-white flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
                                                             >
                                                                 {isUploading ? <FaSpinner className="animate-spin" /> : <FaFileUpload />}
                                                                 {isUploading ? "Uploading..." : "Upload Payment Proof"}
                                                             </button>
-
-                                                            <button onClick={() => setQrData(null)} className="w-full py-2.5 rounded-xl text-xs font-bold text-zinc-500 hover:bg-white border border-transparent hover:border-zinc-200">
+                                                            <button onClick={() => setQrData(null)} className="w-full py-3 rounded-xl text-xs font-bold text-zinc-500 hover:bg-white border border-transparent hover:border-zinc-200 transition-colors">
                                                                 Cancel
                                                             </button>
                                                         </div>
                                                     </div>
-                                                    <div className="w-full md:w-1/2 flex items-center justify-center p-4 bg-white"><div className="p-3 border-2 border-zinc-100 rounded-2xl shadow-sm"><QRCode value={qrData.qr_code} size={220} /></div></div>
+
+                                                    {/* Right Side (QR Code) */}
+                                                    <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-6 bg-white">
+                                                        <div className="p-3 border-2 border-zinc-100 rounded-2xl shadow-sm bg-white">
+                                                            {/* Responsive QR Size */}
+                                                            <div className="w-[180px] h-[180px] sm:w-[220px] sm:h-[220px]">
+                                                                <QRCode
+                                                                    value={qrData.qr_code}
+                                                                    size={256}
+                                                                    style={{ height: "100%", width: "100%" }}
+                                                                    viewBox={`0 0 256 256`}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <p className="md:hidden text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-4">Scan with Bakong App</p>
+                                                    </div>
                                                 </div>
                                             ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <PricingCard title="Starter Pack" price="$1.00" credits="20" perCredit="$0.05 / credit" description="Perfect for quick hires." icon={<FaUser className="text-zinc-400" />} onClick={() => handleBuy('small')} />
-                                                    <PricingCard title="Agency Pro" price="$5.00" credits="150" popular perCredit="$0.03 / credit" savings="Save 40%" description="Best value for high volume." icon={<FaUserShield className="text-white" />} onClick={() => handleBuy('pro')} />
+                                                /* Responsive Grid: 1 col mobile, 3 cols desktop */
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                    <PricingCard title="Mini" price="$0.25" credits="15" perCredit="$0.016" description="Quick try." icon={<FaUserTie className="text-zinc-400" />} onClick={() => handleBuy('mini')} />
+                                                    <PricingCard title="Standard" price="$1.50" credits="100" perCredit="$0.015" description="Active job hunters." icon={<FaBuilding className="text-blue-400" />} onClick={() => handleBuy('standard')} />
+                                                    <PricingCard title="Max" price="$5.00" credits="400" popular perCredit="$0.012" savings="Best Value" description="High volume." icon={<FaCrown className="text-yellow-300" />} onClick={() => handleBuy('max')} />
                                                 </div>
                                             )}
                                         </div>
@@ -371,46 +391,35 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                                             <div className="flex justify-between items-center mb-2">
                                                 <p className="text-xs font-bold uppercase text-zinc-400">History Log</p>
                                                 <div className="flex gap-2">
-                                                    <button onClick={fetchTransactions} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><FaSync size={12} /></button>
-                                                    <button onClick={handleClearHistory} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><FaTrash size={12} /></button>
+                                                    <button onClick={fetchTransactions} className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Refresh"><FaSync size={12} /></button>
+                                                    {/* Removed Delete Button to protect Revenue Data */}
                                                 </div>
                                             </div>
 
                                             {loading ? <div className="py-10 text-center text-zinc-400 text-xs animate-pulse">Loading records...</div> :
-                                                transactions.length === 0 ? <div className="py-12 bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-center"><p className="text-sm text-zinc-400">No transaction history found.</p></div> :
+                                                transactions.length === 0 ? <div className="py-12 bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-center"><p className="text-sm text-zinc-400">No approved transaction history found.</p></div> :
                                                     (
                                                         <div className="space-y-2">
                                                             {transactions.map((tx) => (
                                                                 <div key={tx.id} className="group bg-white border border-zinc-100 hover:border-zinc-300 rounded-xl p-4 flex items-center justify-between transition-all hover:shadow-sm">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${tx.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                                                                tx.status === 'VERIFYING' ? 'bg-blue-100 text-blue-700' :
-                                                                                    tx.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-zinc-100 text-zinc-500'
+                                                                            tx.status === 'VERIFYING' ? 'bg-blue-100 text-blue-700' :
+                                                                                tx.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-zinc-100 text-zinc-500'
                                                                             }`}>
-                                                                            {tx.status === 'COMPLETED' ? <FaCheck /> : tx.status === 'VERIFYING' ? <FaUserShield /> : tx.status === 'PENDING' ? '...' : <FaTimes />}
+                                                                            {tx.status === 'COMPLETED' ? <FaCheck /> : tx.status === 'VERIFYING' ? <FaUserShield /> : tx.status === 'REJECTED' ? <FaTimes /> : '...'}
                                                                         </div>
                                                                         <div>
-                                                                            {/* FIX: Show the Bill Number or fallback to ID */}
                                                                             <div className="font-mono text-xs text-zinc-500">{tx.payment_ref || "No Ref"}</div>
-
-                                                                            {/* FIX: Show PRICE ($1.00) instead of CREDITS ($20) */}
+                                                                            {/* --- FIX 2: CORRECT PRICE DISPLAY --- */}
                                                                             <div className="text-sm font-bold text-zinc-900">
-                                                                                ${tx.price ? tx.price.toFixed(2) : "0.00"}
+                                                                                ${tx.price ? tx.price : (tx.amount === 20 ? "1.00" : tx.amount === 150 ? "5.00" : "0.00")}
                                                                             </div>
                                                                         </div>
                                                                     </div>
 
                                                                     <div className="text-right">
-                                                                        {tx.status === 'PENDING' ? (
-                                                                            <button
-                                                                                onClick={() => handleHistoryUploadClick(tx)}
-                                                                                disabled={uploadingId === tx.id}
-                                                                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase rounded-lg transition shadow-sm hover:shadow-md disabled:opacity-50"
-                                                                            >
-                                                                                {uploadingId === tx.id ? <FaSpinner className="animate-spin" /> : <FaFileUpload />}
-                                                                                {uploadingId === tx.id ? 'Sending...' : 'Upload Proof'}
-                                                                            </button>
-                                                                        ) : tx.status === 'VERIFYING' ? (
+                                                                        {tx.status === 'VERIFYING' ? (
                                                                             <span className="text-[10px] font-bold uppercase text-blue-500 bg-blue-50 px-2 py-1 rounded">In Review</span>
                                                                         ) : (
                                                                             <span className="text-[10px] font-bold uppercase text-zinc-300">{tx.status}</span>
@@ -433,7 +442,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
     );
 };
 
-// ... (Sub-components: SidebarItem, InputGroup, PricingCard, Checkbox, Toggle, SaveButton remain unchanged)
+// ... (Sub-components remain unchanged)
 const SidebarItem = ({ icon: Icon, label, id, active, onClick }) => (
     <button onClick={() => onClick(id)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all duration-200 group ${active === id ? 'bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-200' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900'}`}>
         <div className="flex items-center gap-3"><Icon className={`transition-colors ${active === id ? 'text-zinc-900' : 'text-zinc-400 group-hover:text-zinc-600'}`} size={14} />{label}</div>
@@ -446,11 +455,11 @@ const InputGroup = ({ label, value, onChange }) => (
 );
 
 const PricingCard = ({ title, price, credits, perCredit, savings, description, icon, onClick, popular }) => (
-    <div onClick={onClick} className={`relative group cursor-pointer rounded-2xl p-5 sm:p-6 border transition-all duration-200 active:scale-[0.98] ${popular ? 'bg-zinc-900 text-white border-zinc-900 shadow-xl shadow-zinc-200' : 'bg-white text-zinc-900 border-zinc-200 hover:border-blue-400 sm:hover:shadow-lg sm:hover:shadow-blue-50'}`}>
-        {(popular || savings) && <div className={`absolute top-0 right-0 text-[8px] sm:text-[9px] font-bold uppercase px-2 sm:px-3 py-1 rounded-bl-xl rounded-tr-xl ${popular ? 'bg-linear-to-r from-blue-600 to-indigo-600 text-white' : 'bg-green-100 text-green-700'}`}>{savings || "Most Popular"}</div>}
-        <div className="flex justify-between items-start mb-4 sm:mb-6"><div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-lg ${popular ? 'bg-white/10 text-white' : 'bg-zinc-100 text-zinc-900'}`}>{icon}</div><div className="text-right"><span className={`block text-xl sm:text-2xl font-bold ${popular ? 'text-white' : 'text-zinc-900'}`}>{price}</span><span className={`text-[9px] sm:text-[10px] font-medium opacity-60`}>One-time</span></div></div>
-        <div className="space-y-1 mb-4 sm:mb-6"><h4 className={`text-base sm:text-lg font-bold ${popular ? 'text-white' : 'text-zinc-900'}`}>{title}</h4><p className={`text-[11px] sm:text-xs ${popular ? 'text-zinc-400' : 'text-zinc-500'}`}>{description}</p></div>
-        <div className={`pt-4 border-t flex justify-between items-center ${popular ? 'border-white/10' : 'border-zinc-100'}`}><div className="flex flex-col"><span className={`text-base sm:text-lg font-bold ${popular ? 'text-blue-400' : 'text-zinc-900'}`}>{credits} Credits</span><span className="text-[9px] sm:text-[10px] opacity-50">{perCredit}</span></div><button className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${popular ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'}`}><FaChevronRight size={10} /></button></div>
+    <div onClick={onClick} className={`relative group cursor-pointer rounded-2xl p-4 sm:p-5 border transition-all duration-200 active:scale-[0.98] ${popular ? 'bg-zinc-900 text-white border-zinc-900 shadow-xl shadow-zinc-200' : 'bg-white text-zinc-900 border-zinc-200 hover:border-blue-400 sm:hover:shadow-lg sm:hover:shadow-blue-50'}`}>
+        {(popular || savings) && <div className={`absolute top-0 right-0 text-[8px] sm:text-[9px] font-bold uppercase px-2 sm:px-3 py-1 rounded-bl-xl rounded-tr-xl ${popular ? 'bg-linear-to-r from-yellow-400 to-yellow-600 text-zinc-900' : 'bg-green-100 text-green-700'}`}>{savings || "Most Popular"}</div>}
+        <div className="flex justify-between items-start mb-4"><div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${popular ? 'bg-white/10 text-white' : 'bg-zinc-100 text-zinc-900'}`}>{icon}</div><div className="text-right"><span className={`block text-xl font-bold ${popular ? 'text-white' : 'text-zinc-900'}`}>{price}</span><span className={`text-[9px] sm:text-[10px] font-medium opacity-60`}>One-time</span></div></div>
+        <div className="space-y-1 mb-4"><h4 className={`text-base font-bold ${popular ? 'text-white' : 'text-zinc-900'}`}>{title}</h4><p className={`text-[10px] sm:text-[11px] ${popular ? 'text-zinc-400' : 'text-zinc-500'}`}>{description}</p></div>
+        <div className={`pt-4 border-t flex justify-between items-center ${popular ? 'border-white/10' : 'border-zinc-100'}`}><div className="flex flex-col"><span className={`text-sm font-bold ${popular ? 'text-yellow-400' : 'text-zinc-900'}`}>{credits} Credits</span><span className="text-[9px] opacity-50">{perCredit}</span></div><button className={`h-6 w-6 rounded-full flex items-center justify-center transition-colors ${popular ? 'bg-white text-black hover:bg-zinc-200' : 'bg-black text-white hover:bg-zinc-800'}`}><FaChevronRight size={8} /></button></div>
     </div>
 );
 

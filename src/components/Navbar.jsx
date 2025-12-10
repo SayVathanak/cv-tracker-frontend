@@ -194,7 +194,7 @@ const Navbar = ({
               {/* --- ADMIN BUTTON (MOBILE) --- */}
               {userEmail === ADMIN_EMAIL && (
                 <button
-                  onClick={() => { setShowMenu(false); onOpenAdmin(); }}
+                  onClick={() => { setShowMobileMenu(false); onOpenAdmin(); }}
                   className="flex items-center gap-3 py-3 text-base font-medium text-zinc-800 border-b border-zinc-50"
                 >
                   <FaLock className="text-zinc-400" /> Admin Panel
