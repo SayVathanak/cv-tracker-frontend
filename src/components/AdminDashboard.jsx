@@ -4,7 +4,7 @@ import Swal from 'sweetalert2';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaCheck, FaTimes, FaSyncAlt, FaExternalLinkAlt,
-  FaUsers, FaCoins, FaChartLine, FaBars,
+  FaUsers, FaCoins, FaChartLine, FaBars, FaTrash,
   FaSignOutAlt, FaTachometerAlt, FaList, FaServer,
   FaExclamationTriangle, FaBan, FaUnlock, FaRedo, FaFileAlt
 } from 'react-icons/fa';
@@ -18,14 +18,9 @@ const containerVariants = {
   }
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { opacity: 1, y: 0 }
-};
-
 const AdminDashboard = ({ onClose }) => {
   // --- STATE ---
-  const [activeTab, setActiveTab] = useState('transactions'); // dashboard | transactions | users | logs
+  const [activeTab, setActiveTab] = useState('transactions');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -35,6 +30,9 @@ const AdminDashboard = ({ onClose }) => {
   const [payments, setPayments] = useState([]);
   const [users, setUsers] = useState([]);
   const [failedLogs, setFailedLogs] = useState([]);
+  
+  // NEW: Store the current logged-in admin's ID
+  const [currentAdminId, setCurrentAdminId] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
@@ -60,18 +58,24 @@ const AdminDashboard = ({ onClose }) => {
       const token = localStorage.getItem("cv_token");
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Parallel Fetching for Speed
-      const [analyticsRes, paymentsRes, usersRes, logsRes] = await Promise.all([
+      // UPDATED: Added a call to /users/me to get the current admin's ID
+      const [analyticsRes, paymentsRes, usersRes, logsRes, meRes] = await Promise.all([
         axios.get(`${API_URL}/admin/analytics`, { headers }).catch(() => ({ data: {} })),
         axios.get(`${API_URL}/admin/pending-transactions`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API_URL}/admin/users`, { headers }).catch(() => ({ data: [] })),
-        axios.get(`${API_URL}/admin/failed-parsings`, { headers }).catch(() => ({ data: [] }))
+        axios.get(`${API_URL}/admin/failed-parsings`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/users/me`, { headers }).catch(() => ({ data: null })) // <--- Fetch Current User
       ]);
 
       setStats(analyticsRes.data || {});
       setPayments(paymentsRes.data || []);
       setUsers(usersRes.data || []);
       setFailedLogs(logsRes.data || []);
+
+      // Set the current admin ID so we can protect it
+      if (meRes.data) {
+        setCurrentAdminId(meRes.data.id);
+      }
 
     } catch (e) {
       if (e.response && e.response.status === 403) {
@@ -85,7 +89,6 @@ const AdminDashboard = ({ onClose }) => {
 
   // --- 3. ACTIONS ---
 
-  // Payment Logic
   const handlePaymentDecision = async (id, action) => {
     const confirm = await Swal.fire({
       title: action === "APPROVE" ? 'Approve Payment?' : 'Reject Payment?',
@@ -99,15 +102,19 @@ const AdminDashboard = ({ onClose }) => {
       try {
         const token = localStorage.getItem("cv_token");
         await axios.post(`${API_URL}/admin/process-transaction/${id}?action=${action}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-
         showToast(`Transaction ${action === 'APPROVE' ? 'Approved' : 'Rejected'}`, 'success');
         fetchData();
       } catch (e) { Swal.fire('Error', 'Operation failed', 'error'); }
     }
   };
 
-  // User Logic (Ban/Unban)
   const handleToggleUser = async (user) => {
+    // Prevent banning yourself
+    if (user.id === currentAdminId) {
+      Swal.fire('Action Denied', 'You cannot ban your own account.', 'warning');
+      return;
+    }
+
     const action = user.is_active ? 'Ban' : 'Unban';
     const confirm = await Swal.fire({
       title: `${action} User?`,
@@ -122,14 +129,41 @@ const AdminDashboard = ({ onClose }) => {
       try {
         const token = localStorage.getItem("cv_token");
         await axios.put(`${API_URL}/admin/users/${user.id}/toggle-status`, {}, { headers: { Authorization: `Bearer ${token}` } });
-
         showToast(`User ${action}ned successfully`, 'success');
         fetchData();
       } catch (e) { Swal.fire('Error', 'Could not update user.', 'error'); }
     }
   };
 
-  // AI Retry Logic
+  const handleDeleteUser = async (user) => {
+    // UPDATED: Safety Check
+    if (user.id === currentAdminId) {
+      Swal.fire('Action Denied', 'You cannot delete your own account.', 'error');
+      return;
+    }
+
+    const confirm = await Swal.fire({
+      title: 'Delete User?',
+      text: `This will permanently remove ${user.username} and cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete permanently'
+    });
+
+    if (confirm.isConfirmed) {
+      try {
+        const token = localStorage.getItem("cv_token");
+        await axios.delete(`${API_URL}/admin/users/${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
+        showToast('User deleted successfully', 'success');
+        fetchData();
+      } catch (e) {
+        Swal.fire('Error', e.response?.data?.detail || 'Could not delete user.', 'error');
+      }
+    }
+  };
+
   const handleRetryAI = async (id) => {
     try {
       const token = localStorage.getItem("cv_token");
@@ -300,43 +334,63 @@ const AdminDashboard = ({ onClose }) => {
               {activeTab === 'users' && (
                 <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
 
-                  {/* --- MOBILE VIEW: CARDS (Visible on small screens) --- */}
+                  {/* --- MOBILE VIEW: CARDS --- */}
                   <div className="block md:hidden space-y-3">
-                    {users.map(user => (
-                      <div key={user.id} className={`p-4 rounded-xl border shadow-sm transition-colors ${!user.is_active ? 'bg-red-50/50 border-red-100' : 'bg-white border-zinc-200'}`}>
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="font-bold text-zinc-900 text-sm">{user.username}</div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">Joined: {new Date(user.joined_at).toLocaleDateString()}</div>
+                    {users.map(user => {
+                      // UPDATED: Check if this user row is ME
+                      const isMe = currentAdminId && user.id === currentAdminId;
+                      
+                      return (
+                        <div key={user.id} className={`p-4 rounded-xl border shadow-sm transition-colors ${!user.is_active ? 'bg-red-50/50 border-red-100' : 'bg-white border-zinc-200'}`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <div className="font-bold text-zinc-900 text-sm flex items-center gap-2">
+                                {user.username}
+                                {isMe && <span className="text-[9px] bg-zinc-800 text-white px-1.5 py-0.5 rounded uppercase">YOU</span>}
+                              </div>
+                              <div className="text-[10px] text-zinc-500 mt-0.5">Joined: {new Date(user.joined_at).toLocaleDateString()}</div>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {user.is_active ? 'Active' : 'Banned'}
+                            </span>
                           </div>
-                          <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {user.is_active ? 'Active' : 'Banned'}
-                          </span>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-2 mb-4 bg-zinc-50 p-2 rounded-lg">
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600">
-                            <FaCoins size={12} /> {user.credits} Credits
+                          <div className="grid grid-cols-2 gap-2 mb-4 bg-zinc-50 p-2 rounded-lg">
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-blue-600">
+                              <FaCoins size={12} /> {user.credits} Credits
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
+                              <FaFileAlt size={12} /> {user.uploads} Uploads
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-purple-600">
-                            <FaFileAlt size={12} /> {user.uploads} Uploads
+
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => handleToggleUser(user)}
+                              disabled={isMe}
+                              className={`flex-1 py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 transition-colors 
+                                ${isMe ? 'border-zinc-100 text-zinc-300 cursor-not-allowed bg-zinc-50' : 
+                                  user.is_active ? 'border-orange-200 text-orange-600 bg-white hover:bg-orange-50' : 'border-green-200 text-green-600 bg-white hover:bg-green-50'
+                                }`}
+                            >
+                              {user.is_active ? <><FaBan /> Ban</> : <><FaUnlock /> Unban</>}
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={isMe}
+                              className={`px-4 py-2.5 rounded-lg text-xs font-bold border transition-colors 
+                                ${isMe ? 'border-zinc-100 text-zinc-300 cursor-not-allowed bg-zinc-50' : 'border-red-200 text-red-600 bg-white hover:bg-red-50 hover:text-red-700'}`}
+                            >
+                              <FaTrash />
+                            </button>
                           </div>
                         </div>
-
-                        <button
-                          onClick={() => handleToggleUser(user)}
-                          className={`w-full py-2.5 rounded-lg text-xs font-bold border flex items-center justify-center gap-2 transition-colors ${user.is_active
-                            ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
-                            : 'border-green-200 text-green-600 bg-white hover:bg-green-50'
-                            }`}
-                        >
-                          {user.is_active ? <><FaBan /> Ban User</> : <><FaUnlock /> Unban User</>}
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
-                  {/* --- DESKTOP VIEW: TABLE (Hidden on small screens) --- */}
+                  {/* --- DESKTOP VIEW: TABLE --- */}
                   <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-zinc-50 text-zinc-500 font-medium border-b border-zinc-100">
@@ -348,34 +402,53 @@ const AdminDashboard = ({ onClose }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100">
-                        {users.map(user => (
-                          <tr key={user.id} className={`hover:bg-zinc-50/50 transition-colors ${!user.is_active ? 'bg-red-50/30' : ''}`}>
-                            <td className="px-6 py-4">
-                              <div className="font-bold text-zinc-900">{user.username}</div>
-                              <div className={`text-xs inline-block px-2 py-0.5 rounded-md mt-1 ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                {user.is_active ? 'Active' : 'Banned'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-zinc-500">{new Date(user.joined_at).toLocaleDateString()}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-4 text-xs font-medium">
-                                <span className="flex items-center gap-1 text-blue-600"><FaCoins /> {user.credits} Credits</span>
-                                <span className="flex items-center gap-1 text-purple-600"><FaFileAlt /> {user.uploads} Uploads</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button
-                                onClick={() => handleToggleUser(user)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${user.is_active
-                                  ? 'border-red-200 text-red-600 hover:bg-red-50'
-                                  : 'border-green-200 text-green-600 hover:bg-green-50'
-                                  }`}
-                              >
-                                {user.is_active ? <span className="flex items-center gap-1"><FaBan /> Ban</span> : <span className="flex items-center gap-1"><FaUnlock /> Unban</span>}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {users.map(user => {
+                          const isMe = currentAdminId && user.id === currentAdminId;
+                          return (
+                            <tr key={user.id} className={`hover:bg-zinc-50/50 transition-colors ${!user.is_active ? 'bg-red-50/30' : ''}`}>
+                              <td className="px-6 py-4">
+                                <div className="font-bold text-zinc-900 flex items-center gap-2">
+                                  {user.username}
+                                  {isMe && <span className="text-[10px] bg-zinc-900 text-white px-2 py-0.5 rounded-md font-bold">YOU</span>}
+                                </div>
+                                <div className={`text-xs inline-block px-2 py-0.5 rounded-md mt-1 ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {user.is_active ? 'Active' : 'Banned'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-zinc-500">{new Date(user.joined_at).toLocaleDateString()}</td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-4 text-xs font-medium">
+                                  <span className="flex items-center gap-1 text-blue-600"><FaCoins /> {user.credits} Credits</span>
+                                  <span className="flex items-center gap-1 text-purple-600"><FaFileAlt /> {user.uploads} Uploads</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => handleToggleUser(user)}
+                                    disabled={isMe}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border 
+                                      ${isMe ? 'border-zinc-100 text-zinc-300 cursor-not-allowed' : 
+                                        user.is_active ? 'border-orange-200 text-orange-600 hover:bg-orange-50' : 'border-green-200 text-green-600 hover:bg-green-50'
+                                      }`}
+                                  >
+                                    {user.is_active ? <span className="flex items-center gap-1"><FaBan /> Ban</span> : <span className="flex items-center gap-1"><FaUnlock /> Unban</span>}
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDeleteUser(user)}
+                                    disabled={isMe}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors
+                                      ${isMe ? 'border-zinc-100 text-zinc-300 cursor-not-allowed' : 'border-zinc-200 text-zinc-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50'}`}
+                                    title="Delete User"
+                                  >
+                                    <FaTrash />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

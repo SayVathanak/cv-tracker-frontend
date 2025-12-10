@@ -21,6 +21,7 @@ import SkeletonLoader from './components/SkeletonLoader'
 import CreditModal from './components/CreditModal';
 import UploadModal from './components/UploadModal';
 import AdminDashboard from './components/AdminDashboard';
+import WelcomeModal from './components/WelcomeModal';
 
 // Utils
 import { getUserFromToken, formatDOB } from './utils/helpers'
@@ -48,6 +49,7 @@ function App() {
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [batchStats, setBatchStats] = useState({ total: 0, processed: 0, active: false });
   const [filters, setFilters] = useState({ location: "", position: "", education: "", gender: "" });
+  const [showWelcome, setShowWelcome] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState(null);
@@ -105,13 +107,22 @@ function App() {
       const token = localStorage.getItem("cv_token");
       if (!token) return;
 
-      // This endpoint now returns { current_credits, settings, username }
       const res = await axios.get(`${API_URL}/users/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // 1. Update Credits
       setCredits(res.data.current_credits);
+
+      // --- LOGIC: TRIGGER WELCOME MODAL ---
+      // If user has exactly 10 credits (the sign-up bonus) 
+      // AND we haven't shown them the welcome screen yet.
+      const hasSeenWelcome = localStorage.getItem("cv_welcome_seen");
+
+      // We assume if credits == 10 and they haven't uploaded anything (lifetime_uploads check optional), 
+      // they are new.
+      if (!hasSeenWelcome && res.data.current_credits === 10) {
+        setShowWelcome(true);
+      }
 
       // 2. Update App Settings from Cloud (NEW ADDITION)
       if (res.data.settings && Object.keys(res.data.settings).length > 0) {
@@ -131,6 +142,11 @@ function App() {
       }
 
     } catch (e) { console.error(e); }
+  };
+
+  const handleCloseWelcome = () => {
+    setShowWelcome(false);
+    localStorage.setItem("cv_welcome_seen", "true"); // Mark as seen
   };
 
   useEffect(() => {
@@ -978,6 +994,8 @@ function App() {
         userEmail={currentUser}
         apiUrl={API_URL}
       />
+
+      <WelcomeModal isOpen={showWelcome} onClose={handleCloseWelcome} />
 
     </div>
   )
