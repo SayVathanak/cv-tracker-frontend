@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FaCheck, FaTimes, FaSyncAlt, FaExternalLinkAlt, 
-  FaUsers, FaMoneyBillWave, FaChartLine, FaBars, 
-  FaSignOutAlt, FaTachometerAlt, FaList, FaServer, 
+import {
+  FaCheck, FaTimes, FaSyncAlt, FaExternalLinkAlt,
+  FaUsers, FaMoneyBillWave, FaChartLine, FaBars,
+  FaSignOutAlt, FaTachometerAlt, FaList, FaServer,
   FaExclamationTriangle, FaBan, FaUnlock, FaRedo, FaFileAlt
 } from 'react-icons/fa';
 
 // --- ANIMATION VARIANTS ---
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: { 
+  visible: {
     opacity: 1,
     transition: { staggerChildren: 0.1 }
   }
@@ -44,7 +44,7 @@ const AdminDashboard = ({ onClose }) => {
       setIsMobile(window.innerWidth < 768);
       if (window.innerWidth >= 768) setSidebarOpen(false);
     };
-    handleResize(); 
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -62,7 +62,7 @@ const AdminDashboard = ({ onClose }) => {
 
       // Parallel Fetching for Speed
       const [analyticsRes, paymentsRes, usersRes, logsRes] = await Promise.all([
-        axios.get(`${API_URL}/admin/analytics`, { headers }).catch(() => ({ data: {} })), 
+        axios.get(`${API_URL}/admin/analytics`, { headers }).catch(() => ({ data: {} })),
         axios.get(`${API_URL}/admin/pending-transactions`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API_URL}/admin/users`, { headers }).catch(() => ({ data: [] })),
         axios.get(`${API_URL}/admin/failed-parsings`, { headers }).catch(() => ({ data: [] }))
@@ -76,7 +76,7 @@ const AdminDashboard = ({ onClose }) => {
     } catch (e) {
       if (e.response && e.response.status === 403) {
         Swal.fire('Access Denied', 'You are not an admin.', 'error');
-        onClose(); 
+        onClose();
       }
     } finally {
       setLoading(false);
@@ -99,9 +99,9 @@ const AdminDashboard = ({ onClose }) => {
       try {
         const token = localStorage.getItem("cv_token");
         await axios.post(`${API_URL}/admin/process-transaction/${id}?action=${action}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        
+
         showToast(`Transaction ${action === 'APPROVE' ? 'Approved' : 'Rejected'}`, 'success');
-        fetchData(); 
+        fetchData();
       } catch (e) { Swal.fire('Error', 'Operation failed', 'error'); }
     }
   };
@@ -122,7 +122,7 @@ const AdminDashboard = ({ onClose }) => {
       try {
         const token = localStorage.getItem("cv_token");
         await axios.put(`${API_URL}/admin/users/${user.id}/toggle-status`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        
+
         showToast(`User ${action}ned successfully`, 'success');
         fetchData();
       } catch (e) { Swal.fire('Error', 'Could not update user.', 'error'); }
@@ -132,26 +132,25 @@ const AdminDashboard = ({ onClose }) => {
   // AI Retry Logic
   const handleRetryAI = async (id) => {
     try {
-        const token = localStorage.getItem("cv_token");
-        await axios.post(`${API_URL}/candidates/${id}/retry`, {}, { headers: { Authorization: `Bearer ${token}` } });
-        showToast('AI Retry Queued', 'info');
-        fetchData();
-    } catch(e) { Swal.fire('Error', 'Retry failed', 'error'); }
+      const token = localStorage.getItem("cv_token");
+      await axios.post(`${API_URL}/candidates/${id}/retry`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      showToast('AI Retry Queued', 'info');
+      fetchData();
+    } catch (e) { Swal.fire('Error', 'Retry failed', 'error'); }
   };
 
   const showToast = (title, icon) => {
     Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true })
-        .fire({ icon, title });
+      .fire({ icon, title });
   };
 
   // --- UI COMPONENTS ---
 
   const NavItem = ({ id, icon: Icon, label, count, color }) => (
-    <button 
+    <button
       onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${
-        activeTab === id ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-100'
-      }`}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${activeTab === id ? 'bg-zinc-900 text-white shadow-md' : 'text-zinc-500 hover:bg-zinc-100'
+        }`}
     >
       <Icon className={activeTab === id ? 'text-white' : color || 'text-zinc-400'} /> {label}
       {count > 0 && <span className="ml-auto bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">{count}</span>}
@@ -174,11 +173,11 @@ const AdminDashboard = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-50 flex text-zinc-800 font-sans">
-      
+
       {/* Mobile Overlay */}
       <AnimatePresence>
         {isSidebarOpen && isMobile && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 md:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -187,7 +186,7 @@ const AdminDashboard = ({ onClose }) => {
       </AnimatePresence>
 
       {/* --- SIDEBAR --- */}
-      <motion.aside 
+      <motion.aside
         animate={isMobile ? { x: isSidebarOpen ? 0 : '-100%' } : { x: 0 }}
         initial={false}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -219,7 +218,7 @@ const AdminDashboard = ({ onClose }) => {
           <div className="flex items-center gap-4">
             <button onClick={() => setSidebarOpen(true)} className="md:hidden text-zinc-500"><FaBars size={20} /></button>
             <h2 className="text-lg font-bold text-zinc-800 capitalize">
-                {activeTab === 'dashboard' ? 'Overview' : activeTab.replace('-', ' ')}
+              {activeTab === 'dashboard' ? 'Overview' : activeTab.replace('-', ' ')}
             </h2>
           </div>
           <button onClick={fetchData} className="p-2 text-zinc-400 hover:text-emerald-600 transition-colors">
@@ -230,7 +229,7 @@ const AdminDashboard = ({ onClose }) => {
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto">
             <AnimatePresence mode="wait">
-              
+
               {/* === DASHBOARD === */}
               {activeTab === 'dashboard' && (
                 <motion.div key="dashboard" variants={containerVariants} initial="hidden" animate="visible" exit={{ opacity: 0 }} className="space-y-8">
@@ -241,16 +240,16 @@ const AdminDashboard = ({ onClose }) => {
                   </div>
                   {/* Quick System Health */}
                   <div className="bg-white rounded-2xl border border-zinc-100 p-6 shadow-sm">
-                    <h3 className="font-bold text-zinc-900 mb-4 flex items-center gap-2"><FaServer className="text-zinc-400"/> System Status</h3>
+                    <h3 className="font-bold text-zinc-900 mb-4 flex items-center gap-2"><FaServer className="text-zinc-400" /> System Status</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <div className="p-4 bg-zinc-50 rounded-xl flex justify-between items-center">
-                          <span className="text-sm text-zinc-500">Database Connection</span>
-                          <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Operational</span>
-                       </div>
-                       <div className="p-4 bg-zinc-50 rounded-xl flex justify-between items-center">
-                          <span className="text-sm text-zinc-500">AI Service (Gemini)</span>
-                          <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Active</span>
-                       </div>
+                      <div className="p-4 bg-zinc-50 rounded-xl flex justify-between items-center">
+                        <span className="text-sm text-zinc-500">Database Connection</span>
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Operational</span>
+                      </div>
+                      <div className="p-4 bg-zinc-50 rounded-xl flex justify-between items-center">
+                        <span className="text-sm text-zinc-500">AI Service (Gemini)</span>
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full">Active</span>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -259,32 +258,39 @@ const AdminDashboard = ({ onClose }) => {
               {/* === TRANSACTIONS === */}
               {activeTab === 'transactions' && (
                 <motion.div key="transactions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                    {payments.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
-                             <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mb-4"><FaCheck size={24} /></div>
-                             <p>All payments caught up!</p>
+                  {payments.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
+                      <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mb-4"><FaCheck size={24} /></div>
+                      <p>All payments caught up!</p>
+                    </div>
+                  ) : (
+                    payments.map(pay => (
+                      <motion.div layout key={pay.id} className="bg-white p-5 border border-zinc-200 rounded-2xl flex flex-col md:flex-row gap-4 md:items-center shadow-sm">
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <div><h4 className="font-bold text-zinc-900">{pay.username}</h4><span className="text-xs bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Ref: {pay.payment_ref}</span></div>
+                            <div className="text-right md:hidden">
+                              <span className="text-emerald-600 font-bold">${pay.price || pay.amount}</span>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex gap-2 text-sm">
+                            {pay.proof_url && <a href={pay.proof_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline"><FaExternalLinkAlt size={12} /> View Proof</a>}
+                            <span className="text-zinc-400">|</span><span className="text-zinc-500">{pay.submitted_at?.split('T')[0]}</span>
+                          </div>
                         </div>
-                    ) : (
-                        payments.map(pay => (
-                            <motion.div layout key={pay.id} className="bg-white p-5 border border-zinc-200 rounded-2xl flex flex-col md:flex-row gap-4 md:items-center shadow-sm">
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <div><h4 className="font-bold text-zinc-900">{pay.username}</h4><span className="text-xs bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase font-bold tracking-wider">Ref: {pay.payment_ref}</span></div>
-                                        <div className="text-right md:hidden"><span className="text-emerald-600 font-bold">${pay.amount}</span></div>
-                                    </div>
-                                    <div className="mt-3 flex gap-2 text-sm">
-                                         {pay.proof_url && <a href={pay.proof_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline"><FaExternalLinkAlt size={12} /> View Proof</a>}
-                                         <span className="text-zinc-400">|</span><span className="text-zinc-500">{pay.submitted_at?.split('T')[0]}</span>
-                                    </div>
-                                </div>
-                                <div className="hidden md:block text-right pr-8"><span className="block text-xl font-bold text-zinc-900">${pay.amount}</span><span className="text-xs text-zinc-400">Amount</span></div>
-                                <div className="flex gap-2 pt-4 md:pt-0 border-t md:border-t-0 border-zinc-100">
-                                    <button onClick={() => handlePaymentDecision(pay.id, 'REJECT')} className="flex-1 md:flex-none px-4 py-2 border border-zinc-200 hover:bg-red-50 hover:text-red-600 text-zinc-600 rounded-lg text-sm font-bold transition-colors">Reject</button>
-                                    <button onClick={() => handlePaymentDecision(pay.id, 'APPROVE')} className="flex-1 md:flex-none px-4 py-2 bg-zinc-900 text-white hover:bg-zinc-800 rounded-lg text-sm font-bold shadow-lg transition-all">Approve</button>
-                                </div>
-                            </motion.div>
-                        ))
-                    )}
+                        <div className="hidden md:block text-right pr-8">
+                          <span className="block text-xl font-bold text-zinc-900">
+                            ${pay.price ? pay.price.toFixed(2) : pay.amount}
+                          </span>
+                          <span className="text-xs text-zinc-400">Paid Amount</span>
+                        </div>
+                        <div className="flex gap-2 pt-4 md:pt-0 border-t md:border-t-0 border-zinc-100">
+                          <button onClick={() => handlePaymentDecision(pay.id, 'REJECT')} className="flex-1 md:flex-none px-4 py-2 border border-zinc-200 hover:bg-red-50 hover:text-red-600 text-zinc-600 rounded-lg text-sm font-bold transition-colors">Reject</button>
+                          <button onClick={() => handlePaymentDecision(pay.id, 'APPROVE')} className="flex-1 md:flex-none px-4 py-2 bg-zinc-900 text-white hover:bg-zinc-800 rounded-lg text-sm font-bold shadow-lg transition-all">Approve</button>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
                 </motion.div>
               )}
 
@@ -313,20 +319,19 @@ const AdminDashboard = ({ onClose }) => {
                             <td className="px-6 py-4 text-zinc-500">{new Date(user.joined_at).toLocaleDateString()}</td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-4 text-xs font-medium">
-                                <span className="flex items-center gap-1 text-blue-600"><FaMoneyBillWave/> {user.credits} Credits</span>
-                                <span className="flex items-center gap-1 text-purple-600"><FaFileAlt/> {user.uploads} Uploads</span>
+                                <span className="flex items-center gap-1 text-blue-600"><FaMoneyBillWave /> {user.credits} Credits</span>
+                                <span className="flex items-center gap-1 text-purple-600"><FaFileAlt /> {user.uploads} Uploads</span>
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <button 
+                              <button
                                 onClick={() => handleToggleUser(user)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${
-                                  user.is_active 
-                                  ? 'border-red-200 text-red-600 hover:bg-red-50' 
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${user.is_active
+                                  ? 'border-red-200 text-red-600 hover:bg-red-50'
                                   : 'border-green-200 text-green-600 hover:bg-green-50'
-                                }`}
+                                  }`}
                               >
-                                {user.is_active ? <span className="flex items-center gap-1"><FaBan/> Ban</span> : <span className="flex items-center gap-1"><FaUnlock/> Unban</span>}
+                                {user.is_active ? <span className="flex items-center gap-1"><FaBan /> Ban</span> : <span className="flex items-center gap-1"><FaUnlock /> Unban</span>}
                               </button>
                             </td>
                           </tr>
@@ -342,25 +347,25 @@ const AdminDashboard = ({ onClose }) => {
                 <motion.div key="logs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                   {failedLogs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-zinc-400">
-                         <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mb-4"><FaCheck size={24} /></div>
-                         <p>System is healthy. No failed parsings.</p>
+                      <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mb-4"><FaCheck size={24} /></div>
+                      <p>System is healthy. No failed parsings.</p>
                     </div>
                   ) : (
                     failedLogs.map(log => (
                       <div key={log.id} className="bg-white p-5 border border-red-100 rounded-2xl flex flex-col md:flex-row gap-4 items-start shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-red-400"/>
+                        <div className="absolute top-0 left-0 w-1 h-full bg-red-400" />
                         <div className="flex-1">
                           <h4 className="font-bold text-zinc-900 flex items-center gap-2">
-                             <FaExclamationTriangle className="text-red-500"/> {log.file_name}
+                            <FaExclamationTriangle className="text-red-500" /> {log.file_name}
                           </h4>
                           <p className="text-xs text-red-500 font-mono mt-1 bg-red-50 p-2 rounded-lg border border-red-100 inline-block">{log.error_msg}</p>
                           <div className="mt-2 text-xs text-zinc-400">User: {log.uploaded_by} • {new Date(log.upload_date).toLocaleString()}</div>
                         </div>
                         <div className="flex gap-2">
                           {log.cv_url && (
-                             <a href={log.cv_url} target="_blank" rel="noreferrer" className="p-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 text-zinc-500"><FaExternalLinkAlt/></a>
+                            <a href={log.cv_url} target="_blank" rel="noreferrer" className="p-2 border border-zinc-200 rounded-lg hover:bg-zinc-50 text-zinc-500"><FaExternalLinkAlt /></a>
                           )}
-                          <button onClick={() => handleRetryAI(log.id)} className="px-4 py-2 bg-zinc-900 text-white hover:bg-zinc-800 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg"><FaRedo/> Retry AI</button>
+                          <button onClick={() => handleRetryAI(log.id)} className="px-4 py-2 bg-zinc-900 text-white hover:bg-zinc-800 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg"><FaRedo /> Retry AI</button>
                         </div>
                       </div>
                     ))

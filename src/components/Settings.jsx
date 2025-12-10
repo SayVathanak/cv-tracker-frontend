@@ -6,7 +6,7 @@ import Swal from 'sweetalert2';
 import withReactContent from 'sweetalert2-react-content';
 import {
     FaUserShield, FaFileExcel, FaCloudUploadAlt,
-    FaSave, FaTrash, FaCheck, FaUser, FaCreditCard, 
+    FaSave, FaTrash, FaCheck, FaUser, FaCreditCard,
     FaTimes, FaArrowLeft, FaChevronRight, FaHistory, FaBolt, FaSync, FaSpinner, FaFileUpload
 } from 'react-icons/fa';
 
@@ -14,7 +14,7 @@ const MySwal = withReactContent(Swal);
 
 const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaymentSuccess }) => {
     const [activeTab, setActiveTab] = useState('account');
-    const [mobileView, setMobileView] = useState('menu'); 
+    const [mobileView, setMobileView] = useState('menu');
 
     // --- STATE ---
     const [localSettings, setLocalSettings] = useState(initialSettings || {
@@ -30,15 +30,15 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
     const [credits, setCredits] = useState(currentCredits || 0);
     const [qrData, setQrData] = useState(null);
     // REMOVED: checkInterval state (No more polling)
-    
+
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
-    
+
     // --- UPLOAD STATE ---
-    const [uploadingId, setUploadingId] = useState(null); 
-    const [isUploading, setIsUploading] = useState(false); 
+    const [uploadingId, setUploadingId] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef(null);
-    const selectedTxRef = useRef(null); 
+    const selectedTxRef = useRef(null);
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     const currentUserEmail = initialSettings?.profile?.username;
@@ -96,7 +96,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         const txContext = selectedTxRef.current;
 
         if (!file || !txContext) return;
-        
+
         if (file.size > 5 * 1024 * 1024) {
             MySwal.fire('Error', 'File size must be less than 5MB', 'error');
             return;
@@ -111,7 +111,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         try {
             const token = localStorage.getItem("cv_token");
             await axios.post(`${API_URL}/api/submit-payment-proof?md5_hash=${txContext.md5_hash}`, formData, {
-                headers: { 
+                headers: {
                     'Content-Type': 'multipart/form-data',
                     Authorization: `Bearer ${token}`
                 }
@@ -124,13 +124,13 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                 timer: 2000,
                 showConfirmButton: false
             });
-            
+
             if (txContext.source === 'billing') {
-                setQrData(null); 
+                setQrData(null);
                 // No interval to clear anymore
-                setActiveTab('transactions'); 
+                setActiveTab('transactions');
             } else {
-                fetchTransactions(); 
+                fetchTransactions();
             }
 
         } catch (err) {
@@ -140,7 +140,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
             setUploadingId(null);
             setIsUploading(false);
             selectedTxRef.current = null;
-            e.target.value = ''; 
+            e.target.value = '';
         }
     };
 
@@ -194,7 +194,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
         return titles[tab] || 'Settings';
     };
 
-    const statusBadge = credits > 0 
+    const statusBadge = credits > 0
         ? { label: 'Active', style: 'bg-green-50 text-green-600 border-green-100' }
         : { label: 'Zero Balance', style: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
 
@@ -207,7 +207,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                 <motion.div variants={backdropVariants} initial="hidden" animate="visible" exit="hidden" onClick={onClose} className="absolute inset-0 bg-zinc-900/60 backdrop-blur-sm" />
 
                 <motion.div variants={modalVariants} initial="hidden" animate="visible" exit="exit" className="relative bg-white w-full h-full lg:h-[85vh] lg:max-w-5xl lg:rounded-3xl shadow-2xl flex overflow-hidden">
-                    
+
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
 
                     {/* SIDEBAR */}
@@ -243,7 +243,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                         <div className="flex-1 overflow-y-auto p-5 lg:p-10 custom-scrollbar relative">
                             <AnimatePresence mode="wait">
                                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} className="max-w-2xl mx-auto pb-10">
-                                    
+
                                     {/* ... Other Tabs (Account, Privacy, Parsing, Export) remain the same ... */}
                                     {activeTab === 'account' && (
                                         <div className="space-y-8">
@@ -328,8 +328,8 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                                                             <h3 className="text-xl font-bold text-zinc-900">Scan to Pay</h3>
                                                             {/* Updated Instruction */}
                                                             <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                                                                1. Scan QR with your banking app.<br/>
-                                                                2. Save the receipt.<br/>
+                                                                1. Scan QR with your banking app.<br />
+                                                                2. Save the receipt.<br />
                                                                 3. Upload it here to confirm.
                                                             </p>
                                                         </div>
@@ -337,15 +337,15 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                                                             <div className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Total Amount</div>
                                                             <div className="text-4xl font-bold text-blue-600">${qrData.amount}</div>
                                                         </div>
-                                                        
+
                                                         <div className="space-y-2 mt-auto">
                                                             {/* Primary Action is now Upload */}
-                                                            <button 
+                                                            <button
                                                                 onClick={handleBillingUploadClick}
                                                                 disabled={isUploading}
                                                                 className="w-full py-2.5 rounded-xl text-xs font-bold bg-zinc-900 hover:bg-black text-white flex items-center justify-center gap-2 transition-all shadow-md"
                                                             >
-                                                                {isUploading ? <FaSpinner className="animate-spin" /> : <FaFileUpload />} 
+                                                                {isUploading ? <FaSpinner className="animate-spin" /> : <FaFileUpload />}
                                                                 {isUploading ? "Uploading..." : "Upload Payment Proof"}
                                                             </button>
 
@@ -376,46 +376,50 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                                                 </div>
                                             </div>
 
-                                            {loading ? <div className="py-10 text-center text-zinc-400 text-xs animate-pulse">Loading records...</div> : 
-                                            transactions.length === 0 ? <div className="py-12 bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-center"><p className="text-sm text-zinc-400">No transaction history found.</p></div> : 
-                                            (
-                                                <div className="space-y-2">
-                                                    {transactions.map((tx) => (
-                                                        <div key={tx.id} className="group bg-white border border-zinc-100 hover:border-zinc-300 rounded-xl p-4 flex items-center justify-between transition-all hover:shadow-sm">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                                                    tx.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                                                    tx.status === 'VERIFYING' ? 'bg-blue-100 text-blue-700' :
-                                                                    tx.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-zinc-100 text-zinc-500'
-                                                                }`}>
-                                                                    {tx.status === 'COMPLETED' ? <FaCheck /> : tx.status === 'VERIFYING' ? <FaUserShield /> : tx.status === 'PENDING' ? '...' : <FaTimes />}
-                                                                </div>
-                                                                <div>
-                                                                    <div className="font-mono text-xs text-zinc-500">{tx.payment_ref}</div>
-                                                                    <div className="text-sm font-bold text-zinc-900">${tx.amount}</div>
-                                                                </div>
-                                                            </div>
+                                            {loading ? <div className="py-10 text-center text-zinc-400 text-xs animate-pulse">Loading records...</div> :
+                                                transactions.length === 0 ? <div className="py-12 bg-zinc-50 rounded-xl border border-dashed border-zinc-200 text-center"><p className="text-sm text-zinc-400">No transaction history found.</p></div> :
+                                                    (
+                                                        <div className="space-y-2">
+                                                            {transactions.map((tx) => (
+                                                                <div key={tx.id} className="group bg-white border border-zinc-100 hover:border-zinc-300 rounded-xl p-4 flex items-center justify-between transition-all hover:shadow-sm">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold ${tx.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                                                                                tx.status === 'VERIFYING' ? 'bg-blue-100 text-blue-700' :
+                                                                                    tx.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 'bg-zinc-100 text-zinc-500'
+                                                                            }`}>
+                                                                            {tx.status === 'COMPLETED' ? <FaCheck /> : tx.status === 'VERIFYING' ? <FaUserShield /> : tx.status === 'PENDING' ? '...' : <FaTimes />}
+                                                                        </div>
+                                                                        <div>
+                                                                            {/* FIX: Show the Bill Number or fallback to ID */}
+                                                                            <div className="font-mono text-xs text-zinc-500">{tx.payment_ref || "No Ref"}</div>
 
-                                                            <div className="text-right">
-                                                                {tx.status === 'PENDING' ? (
-                                                                    <button 
-                                                                        onClick={() => handleHistoryUploadClick(tx)}
-                                                                        disabled={uploadingId === tx.id}
-                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase rounded-lg transition shadow-sm hover:shadow-md disabled:opacity-50"
-                                                                    >
-                                                                        {uploadingId === tx.id ? <FaSpinner className="animate-spin" /> : <FaFileUpload />}
-                                                                        {uploadingId === tx.id ? 'Sending...' : 'Upload Proof'}
-                                                                    </button>
-                                                                ) : tx.status === 'VERIFYING' ? (
-                                                                    <span className="text-[10px] font-bold uppercase text-blue-500 bg-blue-50 px-2 py-1 rounded">In Review</span>
-                                                                ) : (
-                                                                    <span className="text-[10px] font-bold uppercase text-zinc-300">{tx.status}</span>
-                                                                )}
-                                                            </div>
+                                                                            {/* FIX: Show PRICE ($1.00) instead of CREDITS ($20) */}
+                                                                            <div className="text-sm font-bold text-zinc-900">
+                                                                                ${tx.price ? tx.price.toFixed(2) : "0.00"}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="text-right">
+                                                                        {tx.status === 'PENDING' ? (
+                                                                            <button
+                                                                                onClick={() => handleHistoryUploadClick(tx)}
+                                                                                disabled={uploadingId === tx.id}
+                                                                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold uppercase rounded-lg transition shadow-sm hover:shadow-md disabled:opacity-50"
+                                                                            >
+                                                                                {uploadingId === tx.id ? <FaSpinner className="animate-spin" /> : <FaFileUpload />}
+                                                                                {uploadingId === tx.id ? 'Sending...' : 'Upload Proof'}
+                                                                            </button>
+                                                                        ) : tx.status === 'VERIFYING' ? (
+                                                                            <span className="text-[10px] font-bold uppercase text-blue-500 bg-blue-50 px-2 py-1 rounded">In Review</span>
+                                                                        ) : (
+                                                                            <span className="text-[10px] font-bold uppercase text-zinc-300">{tx.status}</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
+                                                    )}
                                         </div>
                                     )}
 
