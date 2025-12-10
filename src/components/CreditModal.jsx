@@ -260,7 +260,7 @@ const CreditModal = ({ isOpen, onClose, onSuccess, userEmail }) => {
                        </div>
                        <div className="text-center z-10">
                           <p className="text-2xl font-bold text-zinc-900 tracking-tight">${paymentData.amount}</p>
-                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Scan with Bakong App</p>
+                          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Scan with Banking App</p>
                        </div>
                     </div>
 

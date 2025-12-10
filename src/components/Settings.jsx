@@ -371,7 +371,7 @@ const SettingsPage = ({ onClose, initialSettings, onSave, currentCredits, onPaym
                                                                 />
                                                             </div>
                                                         </div>
-                                                        <p className="md:hidden text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-4">Scan with Bakong App</p>
+                                                        <p className="md:hidden text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-4">Scan with Banking App</p>
                                                     </div>
                                                 </div>
                                             ) : (
