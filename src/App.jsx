@@ -170,8 +170,8 @@ function App() {
     .filter(person => {
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
-        const matchesName = person.Name.toLowerCase().includes(lowerSearch);
-        const matchesTel = person.Tel.includes(searchTerm);
+        const matchesName = (person.Name || "").toLowerCase().includes(lowerSearch);
+        const matchesTel = (person.Tel || "").includes(searchTerm);
         const matchesPosition = person.Position && person.Position.toLowerCase().includes(lowerSearch);
         if (!matchesName && !matchesTel && !matchesPosition) return false;
       }
