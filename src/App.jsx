@@ -683,21 +683,65 @@ function App() {
   }, [])
 
   const handleBulkCopy = async (mode) => {
-    let candidatesToCopy = []
+    // ------------------------------------------
+    // CASE 1: Copy Selected (Fast & Synchronous)
+    // ------------------------------------------
     if (mode === 'selected') {
-      candidatesToCopy = processedCandidates.filter(c => selectedIds.includes(c._id))
-    } else {
-      Toast.fire({ icon: 'info', title: 'Copying All...', text: 'Fetching full dataset...' })
-      candidatesToCopy = await fetchAllForAction()
-    }
+      const candidatesToCopy = processedCandidates.filter(c => selectedIds.includes(c._id))
 
-    if (!candidatesToCopy || candidatesToCopy.length === 0) {
-      Toast.fire({ icon: 'warning', title: 'Nothing to copy' })
+      if (!candidatesToCopy || candidatesToCopy.length === 0) {
+        Toast.fire({ icon: 'warning', title: 'No items selected' })
+        return
+      }
+
+      // Write to clipboard immediately
+      await navigator.clipboard.writeText(formatCandidateText(candidatesToCopy))
+      Toast.fire({ icon: 'success', title: 'Copied selection!' })
+      clearSelection()
       return
     }
-    navigator.clipboard.writeText(formatCandidateText(candidatesToCopy))
-    Toast.fire({ icon: 'success', title: `Copied ${candidatesToCopy.length} items to clipboard` })
-    if (mode === 'selected') clearSelection()
+
+    // ------------------------------------------
+    // CASE 2: Copy All (Async with Mobile Fallback)
+    // ------------------------------------------
+    Toast.fire({ icon: 'info', title: 'Fetching data...', timer: 3000 })
+    
+    // Declare outside try/catch so both blocks can access it
+    let candidatesToCopy = []
+
+    try {
+      // Step A: Fetch Data from Server
+      candidatesToCopy = await fetchAllForAction()
+
+      if (!candidatesToCopy || candidatesToCopy.length === 0) {
+        Toast.fire({ icon: 'warning', title: 'Nothing to copy' })
+        return
+      }
+
+      // Step B: Try Silent Copy (Works on Laptop/Desktop)
+      // This might fail on mobile because too much time passed during fetch
+      await navigator.clipboard.writeText(formatCandidateText(candidatesToCopy))
+      Toast.fire({ icon: 'success', title: 'Copied all items!' })
+
+    } catch (err) {
+      // Step C: Mobile Fallback
+      // If Step B failed (browser security block), show the popup
+      console.warn("Clipboard write blocked. Switching to manual mode.")
+
+      MySwal.fire({
+        title: 'Ready to Copy',
+        text: `Loaded ${candidatesToCopy.length} candidates. Click below to copy.`,
+        icon: 'success',
+        confirmButtonText: 'COPY NOW',
+        confirmButtonColor: '#000',
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Now we are inside a fresh click event, so it works perfectly
+          navigator.clipboard.writeText(formatCandidateText(candidatesToCopy))
+          Toast.fire({ icon: 'success', title: 'Copied!' })
+        }
+      })
+    }
   }
 
   const formatDateForInput = (dateString) => {
