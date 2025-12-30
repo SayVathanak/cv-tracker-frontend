@@ -1,21 +1,33 @@
 import { memo } from 'react'
 import { Document, Page } from 'react-pdf'
-import { FaArrowLeft, FaFilePdf, FaSearchMinus, FaSearchPlus, FaRedo, FaSpinner, FaCopy } from 'react-icons/fa'
+import { FaArrowLeft, FaFilePdf, FaSearchMinus, FaSearchPlus, FaRedo, FaSpinner, FaCopy, FaFileWord, FaFilePowerpoint } from 'react-icons/fa' // Added icons
 import { BsXLg } from "react-icons/bs";
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
 const PDFViewer = memo(({ previewUrl, fileType, zoom, setZoom, showMobilePreview, setShowMobilePreview, editingCandidate, onClear }) => {
+  
+  // Helper to determine what icon/text to show in header
+  const getHeaderInfo = () => {
+    if (fileType === 'docx') return { icon: <FaFileWord className="text-blue-500" size={12} />, text: "Word Document" };
+    if (fileType === 'pptx') return { icon: <FaFilePowerpoint className="text-orange-500" size={12} />, text: "Presentation" };
+    return { icon: <FaFilePdf className="text-zinc-400" size={12} />, text: "Document Preview" };
+  }
+
+  const { icon, text } = getHeaderInfo();
+
   return (
     <>
       <div className="flex-none bg-white border-b border-zinc-200 h-14 flex items-center justify-between px-4 shadow-sm z-10 select-none">
         <div className="flex items-center gap-3">
           <button onClick={() => setShowMobilePreview(false)} className="lg:hidden p-2 -ml-2 text-black hover:bg-zinc-100 rounded transition"><FaArrowLeft /></button>
           <div className="flex items-center gap-2 text-sm font-bold text-black uppercase tracking-wide">
-            <FaFilePdf className="text-zinc-400" size={12} /> Document Preview
+            {icon} {text}
           </div>
         </div>
-        {previewUrl && (
+        
+        {/* Only show zoom controls for PDF and Images. Hide for Office files. */}
+        {previewUrl && !['docx', 'pptx'].includes(fileType) && (
           <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded p-1 select-none">
             <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))} className="p-1 text-zinc-500 hover:text-black"><FaSearchMinus size={12} /></button>
             <span className="text-xs font-bold text-zinc-400 w-8 text-center">{Math.round(zoom * 100)}%</span>
@@ -26,19 +38,42 @@ const PDFViewer = memo(({ previewUrl, fileType, zoom, setZoom, showMobilePreview
             <button onClick={onClear} className="hidden md:flex p-1 text-red-500 hover:bg-red-50 rounded transition" title="Close"><BsXLg size={16} /></button>
           </div>
         )}
+        {/* Simplified Close button for Office files */}
+        {previewUrl && ['docx', 'pptx'].includes(fileType) && (
+             <button onClick={onClear} className="hidden md:flex p-1 text-red-500 hover:bg-red-50 rounded transition" title="Close"><BsXLg size={16} /></button>
+        )}
       </div>
+
       <div className={`flex-1 overflow-auto p-4 lg:p-10 bg-zinc-100 transition-all duration-300 ${editingCandidate && window.innerWidth >= 1024 ? 'border-b border-zinc-300' : ''} ${editingCandidate && window.innerWidth < 1024 ? 'pb-[60vh]' : ''}`}>
         <div className="min-h-full flex justify-center items-start">
           {previewUrl ? (
-            fileType.includes("pdf") ? (
-              <div>
+            
+            /* --- RENDER LOGIC --- */
+            fileType === 'docx' ? (
+                // 1. DOCX (Google Viewer)
+                <iframe 
+                    src={`https://docs.google.com/gview?url=${encodeURIComponent(previewUrl)}&embedded=true`} 
+                    className="w-full h-[800px] border-none shadow-sm bg-white" 
+                    title="Word Preview"
+                />
+            ) : fileType === 'pptx' ? (
+                // 2. PPTX (Error Message)
+                <div className="flex flex-col items-center justify-center h-96 text-zinc-400">
+                    <FaFilePowerpoint className="text-6xl text-orange-400 mb-4" />
+                    <h3 className="text-lg font-bold text-black">Preview Not Available</h3>
+                    <p className="text-xs text-zinc-500 mb-4 max-w-xs text-center">PowerPoint files cannot be previewed here. Please download to view.</p>
+                    <a href={previewUrl} download className="px-4 py-2 bg-black text-white text-xs font-bold uppercase rounded hover:bg-zinc-800">Download File</a>
+                </div>
+            ) : fileType.includes("pdf") ? (
+                // 3. PDF (React-PDF)
                 <Document file={previewUrl} loading={<div className="flex flex-col items-center justify-center h-96 text-zinc-400"><FaSpinner className="animate-spin text-2xl mb-2 text-zinc-300" /><p className="text-xs tracking-wider">Loading...</p></div>} error={<div className="flex flex-col items-center justify-center h-96 text-red-400"><FaFilePdf className="text-4xl mb-2 opacity-50" /><p className="text-xs font-bold uppercase">Failed to load</p></div>}>
                   <Page pageNumber={1} width={(window.innerWidth < 768 ? window.innerWidth - 32 : 650) * zoom} renderTextLayer={false} renderAnnotationLayer={false} />
                 </Document>
-              </div>
             ) : (
-              <img src={previewUrl} className="shadow-md rounded-lg border border-white object-contain" alt="CV" style={{ width: `${100 * zoom}%`, maxWidth: 'none' }} />
+                // 4. IMAGE
+                <img src={previewUrl} className="shadow-md rounded-lg border border-white object-contain" alt="CV" style={{ width: `${100 * zoom}%`, maxWidth: 'none' }} />
             )
+
           ) : (
             <div className="mt-20 flex flex-col items-center text-zinc-300 gap-4 select-none">
               <FaCopy size={48} className="opacity-20" />

@@ -5,7 +5,7 @@ import { pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
 import Swal from 'sweetalert2'
 import withReactContent from 'sweetalert2-react-content'
-import { FaCloudUploadAlt, FaPhoneAlt, FaEdit } from 'react-icons/fa'
+import { FaCloudUploadAlt, FaPhoneAlt, FaEdit, FaFilePowerpoint, FaTimes } from 'react-icons/fa'
 
 // Components
 import SettingsPage from './components/Settings'
@@ -486,9 +486,28 @@ function App() {
     let fileUrl
     if (person._id) fileUrl = `${API_URL}/cv/${person._id}`
     else fileUrl = `${API_URL}/static/${person.file_name}`
-    const isPdf = person.file_name.toLowerCase().endsWith(".pdf")
-    setFileType(isPdf ? "application/pdf" : "image/jpeg")
-    setPreviewUrl(fileUrl)
+
+    // Clean check for file extension
+    const name = (person.file_name || "").toLowerCase();
+    
+    // Default to PDF/Image logic
+    let type = "application/pdf";
+    if (name.endsWith(".jpg") || name.endsWith(".png")) type = "image/jpeg";
+    
+    // New logic for Office Files
+    if (name.endsWith(".docx")) type = "docx";
+    if (name.endsWith(".pptx")) type = "pptx";
+
+    setFileType(type)
+    
+    // For Google Docs Viewer (DOCX), we PREFER the Cloudinary URL 
+    // because Google cannot access 'localhost'.
+    if (type === "docx" && person.cv_url && person.cv_url.startsWith("http")) {
+       setPreviewUrl(person.cv_url);
+    } else {
+       setPreviewUrl(fileUrl);
+    }
+    
     setZoom(1.0)
   }
 

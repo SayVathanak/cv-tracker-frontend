@@ -19,9 +19,11 @@ const ControlPanel = ({
     <div className="relative flex-none p-3 space-y-3 border-b border-zinc-100 bg-white shadow-sm z-20">
       <div className="flex gap-2 h-9">
         <div className="relative flex-1 h-full">
-          <input id="fileInput" type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={handleFileChange} className="hidden" disabled={isUploading} />
+          <input id="fileInput" type="file" multiple
+            accept="application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            onChange={handleFileChange} className="hidden" disabled={isUploading} />
           <label htmlFor="fileInput" className={`w-full h-full flex justify-center items-center gap-2 border rounded text-xs font-bold transition select-none ${isUploading ? 'opacity-50 cursor-not-allowed bg-zinc-50 border-zinc-100 text-zinc-400' : 'border-zinc-200 cursor-pointer bg-zinc-50 text-zinc-600 hover:border-black hover:text-black hover:bg-white'}`}>
-            {files.length > 0 ? <><FaCheck className="text-green-500" /> {files.length} File(s) Ready</> : <><FaCloudUploadAlt className="text-md" /> UPLOAD CV <span className='text-xs font-normal text-zinc-400'>( pdf/img )</span></>}
+            {files.length > 0 ? <><FaCheck className="text-green-500" /> {files.length} File(s) Ready</> : <><FaCloudUploadAlt className="text-md" /> UPLOAD CV <span className='text-xs font-normal text-zinc-400'>( pdf/docx/img )</span></>}
           </label>
         </div>
         {files.length > 0 && !isUploading && (
