@@ -25,10 +25,10 @@ import EditForm from "./components/EditForm";
 import LoginModal from "./components/LoginModal";
 import SkeletonLoader from "./components/SkeletonLoader";
 import CreditModal from "./components/CreditModal";
-import UploadModal from "./components/UploadModal";
+// import UploadModal from "./components/UploadModal";
 import AdminDashboard from "./components/AdminDashboard";
 import WelcomeModal from "./components/WelcomeModal";
-import FolderSidebar from "./components/FolderSidebar"; // --- NEW IMPORT ---
+import FolderSidebar from "./components/FolderSidebar";
 
 // Utils
 import { getUserFromToken, formatDOB } from "./utils/helpers";
@@ -44,7 +44,11 @@ function App() {
   const [files, setFiles] = useState([]);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [fileType, setFileType] = useState("");
-  const [candidates, setCandidates] = useState([]);
+
+  // MAIN DATA
+  const [candidates, setCandidates] = useState([]); // For List View (Paginated)
+  const [dashboardData, setDashboardData] = useState([]); // For Dashboard (Full Data) <--- NEW FIX
+
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,11 +71,11 @@ function App() {
   });
   const [showWelcome, setShowWelcome] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  // const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  // --- FOLDER STATE (NEW) ---
+  // --- FOLDER STATE ---
   const [folders, setFolders] = useState([]);
   const [activeFolder, setActiveFolder] = useState(null); // null = "All Candidates"
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -104,7 +108,6 @@ function App() {
         experience: true,
       },
       autoTags: parsed.autoTags || "",
-
       profile: {
         displayName: parsed.profile?.displayName || "",
         username: currentSystemUser,
@@ -144,7 +147,43 @@ function App() {
     },
   });
 
-  // --- 1. NEW FOLDER FUNCTIONS ---
+  // --- NEW: FETCH FULL DATASET FOR DASHBOARD (The Fix) ---
+  const fetchDashboardData = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const BATCH_SIZE = 50;
+      const params = { page: 1, limit: BATCH_SIZE, search: searchTerm };
+      if (activeFolder) params.folder_id = activeFolder;
+
+      // 1. Fetch first page to get Total count
+      const firstRes = await axios.get(`${API_URL}/candidates`, { params });
+      let allData = firstRes.data.data || [];
+      const totalItems = firstRes.data.total;
+      const totalPages = Math.ceil(totalItems / BATCH_SIZE);
+
+      // 2. If more pages exist, fetch them in parallel
+      if (totalPages > 1) {
+        const promises = [];
+        for (let p = 2; p <= totalPages; p++) {
+          const nextParams = { ...params, page: p };
+          promises.push(
+            axios.get(`${API_URL}/candidates`, { params: nextParams })
+          );
+        }
+        const responses = await Promise.all(promises);
+        responses.forEach((res) => {
+          if (res.data.data) allData = [...allData, ...res.data.data];
+        });
+      }
+
+      // 3. Set the full dataset for the Dashboard
+      setDashboardData(allData);
+    } catch (error) {
+      console.error("Dashboard data fetch failed", error);
+    }
+  };
+
+  // --- FOLDER FUNCTIONS ---
 
   const fetchFolders = async () => {
     try {
@@ -159,7 +198,7 @@ function App() {
     try {
       const res = await axios.post(`${API_URL}/folders`, { name });
       setFolders([res.data, ...folders]);
-      setActiveFolder(res.data.id); // Auto-switch to new folder
+      setActiveFolder(res.data.id);
     } catch (e) {
       Toast.fire({ icon: "error", title: "Could not create folder" });
     }
@@ -170,7 +209,7 @@ function App() {
       await axios.delete(`${API_URL}/folders/${id}`);
       setFolders(folders.filter((f) => f.id !== id));
       if (activeFolder === id) {
-        setActiveFolder(null); // Switch back to 'All'
+        setActiveFolder(null);
       }
       Toast.fire({ icon: "success", title: "Folder deleted" });
     } catch (e) {
@@ -181,14 +220,12 @@ function App() {
   const handleMoveCandidates = async () => {
     if (!checkAuth() || selectedIds.length === 0) return;
 
-    // Create options for the dropdown (Include "Uncategorized" as an option)
     const folderOptions = {};
     folderOptions["root"] = "📂 All Candidates (No Folder)";
     folders.forEach((f) => {
       folderOptions[f.id] = `📂 ${f.name}`;
     });
 
-    // Show SweetAlert Dropdown
     const { value: selectedFolder } = await MySwal.fire({
       title: `Move ${selectedIds.length} Candidates`,
       text: "Select a destination folder:",
@@ -203,7 +240,6 @@ function App() {
 
     if (selectedFolder) {
       const targetId = selectedFolder === "root" ? null : selectedFolder;
-
       try {
         await axios.post(`${API_URL}/candidates/move`, {
           candidate_ids: selectedIds,
@@ -212,10 +248,11 @@ function App() {
 
         Toast.fire({ icon: "success", title: "Moved successfully!" });
 
-        // Refresh Data
+        // Update Everything
         fetchCandidates(currentPage, searchTerm, activeFolder);
-        fetchFolders(); // Update sidebar counts
-        setSelectedIds([]); // Clear selection
+        fetchFolders();
+        fetchDashboardData();
+        setSelectedIds([]);
         setSelectMode(false);
       } catch (e) {
         Toast.fire({ icon: "error", title: "Failed to move items" });
@@ -223,7 +260,7 @@ function App() {
     }
   };
 
-  // --- EXISTING FUNCTIONS UPDATED ---
+  // --- CORE FUNCTIONS ---
 
   const fetchCredits = async () => {
     try {
@@ -279,11 +316,10 @@ function App() {
       const username = getUserFromToken(token);
       if (username) setCurrentUser(username);
 
-      fetchFolders(); // <--- Fetch folders on init
+      fetchFolders();
     }
   }, []);
 
-  // --- UPDATED FETCH TO INCLUDE FOLDER_ID ---
   const fetchCandidates = async (
     page = 1,
     search = searchTerm,
@@ -294,7 +330,7 @@ function App() {
     setLoading(true);
     try {
       const params = { page, limit: 20, search };
-      if (folderId) params.folder_id = folderId; // <--- Pass folder param
+      if (folderId) params.folder_id = folderId;
 
       const res = await axios.get(`${API_URL}/candidates`, { params });
       setCandidates(res.data.data);
@@ -302,7 +338,6 @@ function App() {
       setTotalItems(res.data.total);
       setTotalPages(Math.ceil(res.data.total / res.data.limit));
 
-      // Update folder counts dynamically if we are viewing one
       if (folderId) fetchFolders();
     } catch (error) {
       if (error.response && error.response.status === 401) {
@@ -315,10 +350,32 @@ function App() {
     }
   };
 
-  // --- FILTERING LOGIC ---
+  // --- TRIGGERS ---
+
+  // Trigger both fetches when Search or Folder changes
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchCandidates(1, searchTerm, activeFolder);
+      fetchDashboardData();
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, activeFolder]);
+
+  useEffect(() => {
+    const hasProcessing = candidates.some((c) => c.status === "Processing");
+    if (hasProcessing) {
+      const interval = setInterval(() => {
+        fetchCandidates(currentPage, searchTerm, activeFolder);
+        fetchDashboardData();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [candidates, currentPage, searchTerm, activeFolder]);
+
+  // --- HELPER LOGIC ---
+
   const processedCandidates = candidates
     .filter((person) => {
-      // Only keep the Category Dropdown filters (if you use them)
       if (filters.location && person.Location !== filters.location)
         return false;
       if (filters.position && person.Position !== filters.position)
@@ -350,7 +407,7 @@ function App() {
     setIsAuthenticated(true);
     setCurrentUser(username);
     setShowLoginModal(false);
-    fetchFolders(); // <--- Fetch folders on login
+    fetchFolders();
     window.location.reload();
   };
 
@@ -359,7 +416,8 @@ function App() {
     delete axios.defaults.headers.common["Authorization"];
     setIsAuthenticated(false);
     setCurrentUser(null);
-    setFolders([]); // Clear folders
+    setFolders([]);
+    setDashboardData([]);
     Toast.fire({ icon: "success", title: "Logged out" });
   };
 
@@ -406,24 +464,6 @@ function App() {
         handleBeforeInstallPrompt
       );
   }, []);
-
-  // --- TRIGGER FETCH WHEN SEARCH OR FOLDER CHANGES ---
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchCandidates(1, searchTerm, activeFolder);
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, activeFolder]); // <--- Added activeFolder dependency
-
-  useEffect(() => {
-    const hasProcessing = candidates.some((c) => c.status === "Processing");
-    if (hasProcessing) {
-      const interval = setInterval(() => {
-        fetchCandidates(currentPage, searchTerm, activeFolder);
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [candidates, currentPage, searchTerm, activeFolder]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -507,7 +547,6 @@ function App() {
     setShowCreditModal(true);
   };
 
-  // --- UPDATED UPLOAD LOGIC ---
   const handleUpload = async () => {
     if (!checkAuth()) return;
 
@@ -536,13 +575,13 @@ function App() {
     setUploadProgress(0);
     setStatus("Preparing files...");
     setIsUploading(true);
-    setShowUploadModal(true);
+    // setShowUploadModal(true);
 
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
       formData.append("files", files[i]);
     }
-    // --- SEND FOLDER ID ---
+    // SEND FOLDER ID
     if (activeFolder) {
       formData.append("folder_id", activeFolder);
     }
@@ -563,11 +602,12 @@ function App() {
       setStatus(`Successfully uploaded ${count} files. Processing started.`);
 
       fetchCredits();
-      fetchFolders(); // Update counts
+      fetchFolders();
 
       setTimeout(() => {
         handleClearFiles();
-        fetchCandidates(1, searchTerm, activeFolder); // Refresh current view
+        fetchCandidates(1, searchTerm, activeFolder);
+        fetchDashboardData(); // Update Dashboard
         setIsUploading(false);
       }, 1000);
     } catch (error) {
@@ -580,7 +620,7 @@ function App() {
       if (error.response?.data?.detail) serverMsg = error.response.data.detail;
 
       if (errStatus === 402) {
-        setShowUploadModal(false);
+        // setShowUploadModal(false);
 
         MySwal.fire({
           icon: "error",
@@ -656,6 +696,7 @@ function App() {
         if (res.data.status === "success") {
           Toast.fire({ icon: "success", title: "Updated!" });
           fetchCandidates(currentPage, searchTerm, activeFolder);
+          fetchDashboardData();
           if (editingCandidate && editingCandidate._id === person._id) {
             setEditingCandidate((prev) => ({ ...prev, ...res.data.data }));
           }
@@ -694,7 +735,8 @@ function App() {
             return;
           }
           fetchCandidates(currentPage, searchTerm, activeFolder);
-          fetchFolders(); // Update counts
+          fetchFolders();
+          fetchDashboardData();
           if (showMobilePreview) setShowMobilePreview(false);
           if (editingCandidate && editingCandidate._id === id)
             setEditingCandidate(null);
@@ -736,6 +778,7 @@ function App() {
         if (response.data.status === "success") {
           fetchCandidates(currentPage, searchTerm, activeFolder);
           fetchFolders();
+          fetchDashboardData();
           clearSelection();
           Toast.fire({
             icon: "success",
@@ -766,7 +809,6 @@ function App() {
   const fetchAllForAction = async () => {
     try {
       const BATCH_SIZE = 50;
-      // Pass folderId to bulk fetch as well
       const params = { page: 1, limit: BATCH_SIZE, search: searchTerm };
       if (activeFolder) params.folder_id = activeFolder;
 
@@ -882,6 +924,7 @@ function App() {
       );
       setEditingCandidate(null);
       fetchCandidates(currentPage, searchTerm, activeFolder);
+      fetchDashboardData();
     } catch (error) {
       alert("Failed to save");
     }
@@ -1025,7 +1068,6 @@ function App() {
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
-        {/* --- 1. NEW FOLDER SIDEBAR (Conditional on Auth) --- */}
         {isAuthenticated && (
           <FolderSidebar
             folders={folders}
@@ -1166,10 +1208,9 @@ function App() {
         `}
         >
           <div className="absolute inset-0 z-0">
-            {/* <DashboardPanel stats={stats} candidates={candidates} /> */}
+            {/* FIX: Dashboard now gets full data (dashboardData), not paginated list (candidates) */}
             <DashboardPanel
-              stats={stats}
-              candidates={candidates}
+              candidates={dashboardData}
               folderName={activeFolderName}
             />
           </div>
@@ -1297,14 +1338,14 @@ function App() {
         <AdminDashboard onClose={() => setShowAdminPanel(false)} />
       )}
 
-      <UploadModal
+      {/* <UploadModal
         isOpen={showUploadModal}
         progress={uploadProgress}
         status={status}
         error={uploadError}
         onClose={() => setShowUploadModal(false)}
         fileCount={files.length}
-      />
+      /> */}
 
       <CreditModal
         isOpen={showCreditModal}

@@ -11,7 +11,7 @@ const ADMIN_EMAIL = "saksovathanaksay@gmail.com";
 const Navbar = ({
   deferredPrompt, handleInstallClick, isAuthenticated, setShowLoginModal,
   handleLogout, currentUser, userEmail, onOpenSettings, onOpenAdmin, autoDeleteEnabled, credits,
-  onBuyCredits
+  onBuyCredits, 
 }) => {
   const [showMenu, setShowMenu] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
@@ -29,7 +29,7 @@ const Navbar = ({
 
   return (
     <>
-      <nav className="flex-none h-16 px-4 md:px-6 border-b border-zinc-100 bg-white/80 backdrop-blur-md flex items-center justify-between z-40 sticky top-0 select-none">
+      <nav className="flex-none h-12 px-4 md:px-6 border-b border-zinc-100 bg-white/80 backdrop-blur-md flex items-center justify-between z-40 sticky top-0 select-none">
 
         {/* --- LEFT: Logo & User Info --- */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -37,7 +37,7 @@ const Navbar = ({
 
           <div className="flex flex-col justify-center min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] md:text-xs text-zinc-400 font-medium">Welcome Back,</span>
+              <span className="text-[10px] md:text-xs text-zinc-400 font-sans">Welcome Back,</span>
               {isAuthenticated && autoDeleteEnabled && (
                 <div className="hidden md:flex items-center gap-1 px-1.5 py-0.5 bg-green-50 border border-green-200 rounded text-[9px] font-bold text-green-700 uppercase tracking-wide">
                   <FaUserShield size={8} />
@@ -45,7 +45,7 @@ const Navbar = ({
                 </div>
               )}
             </div>
-            <span className="text-md md:text-xl font-bold text-zinc-900 tracking-tight truncate max-w-[150px] md:max-w-none">
+            <span className="text-sm md:text-md font-semibold text-zinc-900 tracking-tight truncate max-w-[150px] md:max-w-none">
               {currentUser || "Guest"}.
             </span>
           </div>
