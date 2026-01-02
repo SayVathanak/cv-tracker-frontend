@@ -1065,23 +1065,34 @@ function App() {
         autoDeleteEnabled={appSettings.autoDelete}
         credits={credits}
         onBuyCredits={handleBuyCredits}
+        folders={folders}
+        activeFolder={activeFolder}
+        onSelectFolder={(id) => {
+          setActiveFolder(id);
+          setCurrentPage(1);
+        }}
       />
 
       <main className="flex-1 flex overflow-hidden max-w-[1920px] mx-auto w-full relative">
+        {/* MODIFICATION STARTS HERE */}
         {isAuthenticated && (
-          <FolderSidebar
-            folders={folders}
-            activeFolder={activeFolder}
-            onSelectFolder={(id) => {
-              setActiveFolder(id);
-              setCurrentPage(1); // Reset page on folder switch
-            }}
-            onCreateFolder={handleCreateFolder}
-            onDeleteFolder={handleDeleteFolder}
-            isOpen={isSidebarOpen}
-            setIsOpen={setIsSidebarOpen}
-          />
+          // Added wrapper div with 'hidden md:flex' to hide on mobile
+          <div className="hidden md:flex h-full">
+            <FolderSidebar
+              folders={folders}
+              activeFolder={activeFolder}
+              onSelectFolder={(id) => {
+                setActiveFolder(id);
+                setCurrentPage(1);
+              }}
+              onCreateFolder={handleCreateFolder}
+              onDeleteFolder={handleDeleteFolder}
+              isOpen={isSidebarOpen}
+              setIsOpen={setIsSidebarOpen}
+            />
+          </div>
         )}
+        {/* MODIFICATION ENDS HERE */}
 
         <div
           className={`flex flex-col w-full lg:w-[500px] xl:w-[550px] border-r border-zinc-200 h-full transition-all duration-300 z-10 bg-white
