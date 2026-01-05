@@ -151,7 +151,7 @@ const DashboardPanel = ({ candidates, folderName = "All Candidates" }) => {
   return (
     <div className="h-full w-full bg-white select-text overflow-hidden flex flex-col font-sans">
       {/* 1. HEADER SECTION */}
-      <div className="flex-none p-4 border-b border-zinc-100">
+      <div className="flex-none p-4">
         {/* Status Bar Row (Matches StatusBar.jsx style) */}
         <div className="flex justify-between items-center mb-4 pb-4 border-b border-zinc-50">
           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
@@ -167,18 +167,34 @@ const DashboardPanel = ({ candidates, folderName = "All Candidates" }) => {
           </div>
         </div>
 
-        {/* Title Row */}
-        <div className="mb-4">
-          <h1 className="text-xl font-semibold text-black tracking-tight leading-none">
-            {folderName}
-          </h1>
-          <p className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">
-            Analytics Overview
-          </p>
+        {/* Title Row & AI Accuracy */}
+        <div className="flex justify-between items-end mb-4">
+          {/* Left: Folder Name */}
+          <div>
+            <h1 className="text-xl font-semibold text-black tracking-tight leading-none">
+              {folderName}
+            </h1>
+            <p className="text-[10px] text-zinc-400 mt-1 uppercase tracking-widest">
+              Analytics Overview
+            </p>
+          </div>
+
+          {/* Right: AI Accuracy (Moved Here) */}
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xl font-bold text-black tracking-tight leading-none">
+                {analytics.avgConf}%
+              </span>
+              <FaMagic className="text-zinc-300 text-[12px]" />
+            </div>
+            <span className="text-[9px] text-zinc-400 font-medium uppercase tracking-widest mt-0.5">
+              AI Accuracy
+            </span>
+          </div>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-20">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 h-20">
           <DetailedStat
             label="Total Profiles"
             value={analytics.totalVisible}
@@ -190,12 +206,6 @@ const DashboardPanel = ({ candidates, folderName = "All Candidates" }) => {
             value={analytics.positions.length}
             sub="Detected"
             icon={FaBriefcase}
-          />
-          <DetailedStat
-            label="AI Accuracy"
-            value={`${analytics.avgConf}%`}
-            sub="Avg. Confidence"
-            icon={FaMagic}
           />
 
           {/* Compact Demographics */}

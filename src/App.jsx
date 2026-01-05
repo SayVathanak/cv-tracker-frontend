@@ -25,7 +25,7 @@ import EditForm from "./components/EditForm";
 import LoginModal from "./components/LoginModal";
 import SkeletonLoader from "./components/SkeletonLoader";
 import CreditModal from "./components/CreditModal";
-// import UploadModal from "./components/UploadModal";
+import UploadModal from "./components/UploadModal";
 import AdminDashboard from "./components/AdminDashboard";
 import WelcomeModal from "./components/WelcomeModal";
 import FolderSidebar from "./components/FolderSidebar";
@@ -71,7 +71,7 @@ function App() {
   });
   const [showWelcome, setShowWelcome] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
-  // const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -575,7 +575,7 @@ function App() {
     setUploadProgress(0);
     setStatus("Preparing files...");
     setIsUploading(true);
-    // setShowUploadModal(true);
+    setShowUploadModal(true);
 
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
@@ -620,7 +620,7 @@ function App() {
       if (error.response?.data?.detail) serverMsg = error.response.data.detail;
 
       if (errStatus === 402) {
-        // setShowUploadModal(false);
+        setShowUploadModal(false);
 
         MySwal.fire({
           icon: "error",
@@ -1349,14 +1349,14 @@ function App() {
         <AdminDashboard onClose={() => setShowAdminPanel(false)} />
       )}
 
-      {/* <UploadModal
+      <UploadModal
         isOpen={showUploadModal}
         progress={uploadProgress}
         status={status}
         error={uploadError}
         onClose={() => setShowUploadModal(false)}
         fileCount={files.length}
-      /> */}
+      />
 
       <CreditModal
         isOpen={showCreditModal}

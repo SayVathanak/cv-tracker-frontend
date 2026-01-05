@@ -4,7 +4,6 @@ import {
   FaCheck,
   FaExclamationTriangle,
   FaClock,
-  Famagic,
 } from "react-icons/fa"; // Added FaMagic for AI icon if needed
 
 const UploadModal = ({

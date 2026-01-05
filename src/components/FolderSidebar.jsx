@@ -48,9 +48,8 @@ const FolderSidebar = ({
 
   return (
     <div
-      // CHANGE 1: Main Background to Light Gray
       className={`h-full bg-white text-zinc-600 flex flex-col transition-all duration-300 relative border-r border-zinc-200 ${
-        isOpen ? "w-64" : "w-16"
+        isOpen ? "w-48" : "w-16"
       }`}
     >
       {/* Toggle Button */}
@@ -78,16 +77,19 @@ const FolderSidebar = ({
         {/* "All Candidates" Option */}
         <div
           onClick={() => onSelectFolder(null)}
-          // CHANGE 2: Active State is White Card with Shadow
+          title="All Candidates" // <--- 1. ADDED TOOLTIP
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
             activeFolder === null
               ? "text-black bg-zinc-100 font-semibold"
               : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100"
           }`}
         >
+          {/* Kept at 14 or 16 depending on preference, 14 usually looks okay for LayerGroup */}
           <FaLayerGroup
             size={14}
-            className={activeFolder === null ? "text-black" : "text-zinc-400"}
+            className={`shrink-0 ${
+              activeFolder === null ? "text-black" : "text-zinc-400"
+            }`}
           />
           {isOpen && (
             <div className="flex justify-between w-full">
@@ -101,18 +103,20 @@ const FolderSidebar = ({
           <div
             key={folder.id}
             onClick={() => onSelectFolder(folder.id)}
+            title={folder.name} // <--- 1. ADDED TOOLTIP (Shows name on hover)
             className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
               activeFolder === folder.id
                 ? "bg-white shadow-sm ring-1 ring-zinc-200 text-black font-semibold"
                 : "text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100"
             }`}
           >
+            {/* 2. INCREASED SIZE TO 16 AND ADDED shrink-0 */}
             {activeFolder === folder.id ? (
-              <FaFolderOpen size={14} className="text-black" />
+              <FaFolderOpen size={16} className="text-black shrink-0" />
             ) : (
               <FaFolder
-                size={14}
-                className="text-zinc-400 group-hover:text-zinc-500"
+                size={16}
+                className="text-zinc-400 group-hover:text-zinc-500 shrink-0"
               />
             )}
 
@@ -126,6 +130,7 @@ const FolderSidebar = ({
                 </div>
                 <button
                   onClick={(e) => handleDelete(e, folder.id, folder.name)}
+                  title="Delete Folder"
                   className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-red-50 text-zinc-300 hover:text-red-500 rounded transition"
                 >
                   <FaTrash size={10} />
@@ -140,7 +145,7 @@ const FolderSidebar = ({
       <div className="p-3 border-t border-zinc-200 bg-zinc-50">
         <button
           onClick={handleCreate}
-          // CHANGE 3: Button is Black (High Contrast)
+          title="Create New Folder"
           className={`w-full flex items-center justify-center gap-2 bg-black hover:bg-zinc-800 text-white p-2.5 rounded-lg shadow-sm transition-all ${
             isOpen ? "" : "px-0"
           }`}
